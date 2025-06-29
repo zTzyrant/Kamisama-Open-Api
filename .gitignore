@@ -44,3 +44,5 @@ package-lock.json
 dist
 
 .env
+# Local Netlify folder
+.netlify
