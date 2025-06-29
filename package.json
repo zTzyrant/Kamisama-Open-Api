@@ -7,7 +7,7 @@
     "migrate": "bun x prisma generate dev --name init",
     "generate": "prisma generate",
     "build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile ./dist/index ./src/index.ts",
-    "start": "bun run --watch dist/index"
+    "start": "bun run --watch src/index.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.10.1",
