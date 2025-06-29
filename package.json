@@ -1,12 +1,17 @@
 {
-  "name": "Kamisama-Open-Api",
+  "name": "kamisama-open-api",
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "migrate": "bun x prisma generate dev --name init",
+    "generate": "prisma generate",
+    "build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile ./dist/index ./src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "@prisma/client": "^6.10.1",
+    "elysia": "latest",
+    "prisma": "^6.10.1"
   },
   "devDependencies": {
     "bun-types": "latest"

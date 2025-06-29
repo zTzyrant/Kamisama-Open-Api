@@ -1,0 +1,30 @@
+datasource db {
+    provider = "mongodb"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+    output   = "../src/generated/prisma"
+}
+
+model User {
+    id        String    @id @default(auto()) @map("_id") @db.ObjectId
+    name      String
+    email     String    @unique
+    username  String    @unique
+    password  String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+}
+
+model IpaymuTestAccount {
+    id         String    @id @default(auto()) @map("_id") @db.ObjectId
+    va         String
+    apiKey     String
+    websiteURL String
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
+    deletedAt  DateTime?
+}
