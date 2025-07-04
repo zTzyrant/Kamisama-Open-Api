@@ -42,7 +42,18 @@ export class AuthService {
 		return userWithoutPassword
 	}
 
-	static async login(userData: LoginUserDto, jwt: any, refreshTokenJwt: any) {
+	static async login(
+		userData: LoginUserDto,
+		jwt: any,
+		refreshTokenJwt: any,
+		headers: {
+			'x-device': string
+			'x-device-id'?: string
+			'x-lat'?: number
+			'x-long'?: number
+			'x-ip'?: string
+		}
+	) {
 		const { username, password } = userData
 
 		const user = await prisma.user.findUnique({
@@ -59,51 +70,52 @@ export class AuthService {
 			throw new Error('Password salah.')
 		}
 
-		const jti = uuidv4() // Generate a unique ID for the access token
+		const accessTokenJti = uuidv4() // Generate a unique ID for the access token
+		const refreshTokenJti = uuidv4() // Generate a unique ID for the refresh token
 
 		const accessToken = await jwt.sign({
 			id: user.id,
 			username: user.username,
-			jti // Include jti in the access token payload
+			jti: accessTokenJti // Include jti in the access token payload
 		})
 
 		const refreshToken = await refreshTokenJwt.sign({
 			id: user.id,
-			username: user.username
+			username: user.username,
+			jti: refreshTokenJti // Include jti in the refresh token payload
 		})
 
-		const existingToken = await prisma.token.findFirst({
-			where: {
-				userId: user.id
+		const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+
+		// Always create a new Token entry for each login session
+		const newToken = await prisma.token.create({
+			data: {
+				token: refreshToken,
+				jti: refreshTokenJti, // Store the refresh token's jti
+				userId: user.id,
+				expiresAt: sessionExpiresAt
 			}
 		})
 
-		if (existingToken) {
-			await prisma.token.update({
-				where: {
-					id: existingToken.id
-				},
-				data: {
-					token: refreshToken,
-					expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-				}
-			})
-		} else {
-			await prisma.token.create({
-				data: {
-					token: refreshToken,
-					userId: user.id,
-					expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-				}
-			})
-		}
+		await prisma.userSession.create({
+			data: {
+				userId: user.id,
+				tokenId: newToken.id,
+				device: headers['x-device'],
+				deviceId: headers['x-device-id'],				ip: headers['x-ip'],
+				lat: headers['x-lat'],
+				long: headers['x-long'],
+				expiresAt: sessionExpiresAt
+			}
+		})
 
 		return { accessToken, refreshToken }
 	}
 
-	static async logout(refreshToken: string, jti?: string, exp?: number) {
+		static async logout(refreshTokenJti: string, accessTokenJti?: string, accessTokenExp?: number) {
 		const existingToken = await prisma.token.findUnique({
-			where: { token: refreshToken }
+			where: { jti: refreshTokenJti },
+			include: { session: true } // Include session to invalidate it
 		})
 
 		if (existingToken) {
@@ -111,22 +123,28 @@ export class AuthService {
 				where: { id: existingToken.id },
 				data: { isRevoked: true }
 			})
+			// Invalidate the corresponding user session
+			if (existingToken.session) {
+				await prisma.userSession.delete({
+					where: { id: existingToken.session.id }
+				})
+			}
 		}
 
-		if (jti && exp) {
+		if (accessTokenJti && accessTokenExp) {
 			// Add the access token's jti to the revoked list
 			await prisma.revokedAccessToken.create({
 				data: {
-					jti,
-					expiresAt: new Date(exp * 1000) // exp is in seconds, convert to milliseconds
+					jti: accessTokenJti,
+					expiresAt: new Date(accessTokenExp * 1000) // exp is in seconds, convert to milliseconds
 				}
 			})
 		}
 	}
 
-	static async refreshToken(refreshToken: string, jwtSigner: any) {
+	static async refreshToken(oldRefreshTokenJti: string, jwtSigner: any, refreshTokenJwtSigner: any, oldAccessTokenJti?: string, oldAccessTokenExp?: number) {
 		const existingToken = await prisma.token.findUnique({
-			where: { token: refreshToken, isRevoked: false }
+			where: { jti: oldRefreshTokenJti, isRevoked: false }
 		})
 
 		if (!existingToken || new Date() > existingToken.expiresAt) {
@@ -144,22 +162,67 @@ export class AuthService {
 			throw new Error('User tidak ditemukan.')
 		}
 
-		const jti = uuidv4() // Generate a new unique ID for the new access token
-
-		const accessToken = await jwtSigner.sign({
-			id: user.id,
-			username: user.username,
-			role: user.role.name, // Sertakan nama role dalam payload JWT
-			jti // Include new jti in the access token payload
+		// Revoke the old refresh token
+		await prisma.token.update({
+			where: { id: existingToken.id },
+			data: { isRevoked: true }
 		})
 
-		return { accessToken }
+		// Revoke the old access token's jti if provided
+		if (oldAccessTokenJti && oldAccessTokenExp) {
+			await prisma.revokedAccessToken.create({
+				data: {
+					jti: oldAccessTokenJti,
+					expiresAt: new Date(oldAccessTokenExp * 1000)
+				}
+			})
+		}
+
+		const newAccessTokenJti = uuidv4() // Generate a new unique ID for the new access token
+		const newRefreshTokenJti = uuidv4() // Generate a new unique ID for the new refresh token
+
+		const newAccessToken = await jwtSigner.sign({
+			id: user.id,
+			username: user.username,
+			jti: newAccessTokenJti // Include new jti in the access token payload
+		})
+
+		const newRefreshToken = await refreshTokenJwtSigner.sign({
+			id: user.id,
+			username: user.username,
+			jti: newRefreshTokenJti // Include new jti in the refresh token payload
+		})
+
+		const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+
+		// Create a new Token entry for the new refresh token
+		await prisma.token.create({
+			data: {
+				token: newRefreshToken,
+				jti: newRefreshTokenJti,
+				userId: user.id,
+				expiresAt: sessionExpiresAt
+			}
+		})
+
+		return { accessToken: newAccessToken, refreshToken: newRefreshToken }
+	}
+
+	static async isAccessTokenRevoked(jti: string): Promise<boolean> {
+		const revokedToken = await prisma.revokedAccessToken.findUnique({
+			where: { jti },
+		})
+		return !!revokedToken && revokedToken.expiresAt > new Date()
 	}
 
 	static async revokeToken(userId: string, jti?: string, exp?: number) {
 		await prisma.token.updateMany({
 			where: { userId: userId, isRevoked: false },
 			data: { isRevoked: true }
+		})
+		// Invalidate all user sessions for this user
+		await prisma.userSession.deleteMany({
+			where: { userId: userId }
 		})
 
 		if (jti && exp) {
@@ -174,28 +237,61 @@ export class AuthService {
 	}
 
 	static async getActiveSessions(userId: string) {
-		return prisma.token.findMany({
+		return prisma.userSession.findMany({
 			where: {
 				userId: userId,
-				isRevoked: false,
 				expiresAt: {
 					gt: new Date()
 				}
 			},
 			select: {
 				id: true,
+				device: true,
+				deviceId: true,
+				ip: true,
+				lat: true,
+				long: true,
 				createdAt: true,
 				expiresAt: true
 			}
 		})
 	}
 
+	static async revokeSession(userId: string, sessionId: string) {
+		const sessionToRevoke = await prisma.userSession.findUnique({
+			where: { id: sessionId, userId: userId }
+		})
+
+		if (sessionToRevoke) {
+			// Revoke the associated token
+			await prisma.token.update({
+				where: { id: sessionToRevoke.tokenId },
+				data: { isRevoked: true }
+			})
+			// Delete the session
+			await prisma.userSession.delete({
+				where: { id: sessionId }
+			})
+		}
+	}
+
+	static async revokeAllSessions(userId: string) {
+		// Revoke all tokens for the user
+		await prisma.token.updateMany({
+			where: { userId: userId, isRevoked: false },
+			data: { isRevoked: true }
+		})
+		// Delete all sessions for the user
+		await prisma.userSession.deleteMany({
+			where: { userId: userId }
+		})
+	}
+
 	static async getAllActiveUsers() {
 		return prisma.user.findMany({
 			where: {
-				tokens: {
+				sessions: {
 					some: {
-						isRevoked: false,
 						expiresAt: {
 							gt: new Date()
 						}
@@ -212,9 +308,8 @@ export class AuthService {
 	}
 
 	static async getAllActiveSessions() {
-		return prisma.token.findMany({
+		return prisma.userSession.findMany({
 			where: {
-				isRevoked: false,
 				expiresAt: {
 					gt: new Date()
 				}

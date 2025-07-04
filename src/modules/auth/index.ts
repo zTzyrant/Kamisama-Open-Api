@@ -39,20 +39,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 		})
 	)
 	.use(bearer())
-	.onBeforeHandle(async ({ jwt, bearer, set }) => {
-		if (bearer) {
-			const decoded = await jwt.verify(bearer)
-			if (decoded && decoded.jti) {
-				const revoked = await prisma.revokedAccessToken.findUnique({
-					where: { jti: decoded.jti }
-				})
-				if (revoked) {
-					set.status = 401
-					return { message: 'Token has been revoked' }
-				}
-			}
-		}
-	})
+
 	.post(
 		'/register',
 		async ({ body, set }) => {
@@ -94,9 +81,23 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 	)
 	.post(
 		'/login',
-		async ({ body, set, jwt, refreshTokenJwt }) => {
+		async ({ body, set, jwt, refreshTokenJwt, headers }) => {
 			try {
-				const tokens = await AuthService.login(body, jwt, refreshTokenJwt)
+				const device = headers['x-device'] || 'unknown'
+				const deviceId = headers['x-device-id']
+				const lat = headers['x-lat'] ? parseFloat(headers['x-lat']) : undefined
+				const long = headers['x-long']
+					? parseFloat(headers['x-long'])
+					: undefined
+				const ip = headers['x-ip']
+
+				const tokens = await AuthService.login(body, jwt, refreshTokenJwt, {
+					'x-device': device,
+					'x-device-id': deviceId,
+					'x-lat': lat,
+					'x-long': long,
+					'x-ip': ip
+				})
 				return { ...tokens }
 			} catch (error: any) {
 				set.status = 401
@@ -107,19 +108,51 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 			body: LoginUserSchema,
 			detail: {
 				summary: 'Login a User',
-				tags: ['Authentication']
+				tags: ['Authentication'],
+				headers: t.Object({
+					'x-device': t.String({
+						default: 'unknown',
+						description: 'Device type (e.g., web, mobile, desktop)'
+					}),
+					'x-device-id': t.Optional(
+						t.String({ description: 'Unique device identifier' })
+					),
+					'x-lat': t.Optional(
+						t.Numeric({ description: 'Latitude of the device' })
+					),
+					'x-long': t.Optional(
+						t.Numeric({ description: 'Longitude of the device' })
+					),
+					'x-ip': t.Optional(
+						t.String({ description: 'IP address of the device' })
+					)
+				})
 			}
 		}
 	)
 	.post(
 		'/refresh-token',
-		async ({ body, set, jwt }) => {
+		async ({ body, set, jwt, bearer }) => {
 			try {
-				const { accessToken } = await AuthService.refreshToken(
-					body.refreshToken,
-					jwt
+				let oldAccessTokenJti: string | undefined
+				let oldAccessTokenExp: number | undefined
+
+				if (bearer) {
+					const decodedAccessToken = await jwt.verify(bearer)
+					if (decodedAccessToken && decodedAccessToken.jti && decodedAccessToken.exp) {
+						oldAccessTokenJti = decodedAccessToken.jti
+						oldAccessTokenExp = decodedAccessToken.exp
+					}
+				}
+
+				const { accessToken, refreshToken } = await AuthService.refreshToken(
+					decodedRefreshToken.jti,
+					jwt,
+					refreshTokenJwt,
+					oldAccessTokenJti,
+					oldAccessTokenExp
 				)
-				return { accessToken }
+				return { accessToken, refreshToken }
 			} catch (error: any) {
 				set.status = 401
 				return { message: error.message }
@@ -135,19 +168,200 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 	)
 	.post(
 		'/logout',
-		async ({ body, set, jwt, bearer }) => {
+		async ({ body, set, jwt, bearer, refreshTokenJwt }) => {
 			const decodedAccessToken = await jwt.verify(bearer)
-			if (decodedAccessToken && decodedAccessToken.jti) {
-				await AuthService.logout(body.refreshToken, decodedAccessToken.jti, decodedAccessToken.exp)
-			} else {
-				await AuthService.logout(body.refreshToken, undefined, undefined)
+			const decodedRefreshToken = await refreshTokenJwt.verify(body.refreshToken)
+
+			if (!decodedRefreshToken || !decodedRefreshToken.jti) {
+				set.status = 400
+				return { message: 'Invalid refresh token' }
 			}
+
+			await AuthService.logout(
+				decodedRefreshToken.jti, // Pass refresh token's jti
+				decodedAccessToken?.jti, // Pass access token's jti (optional)
+				decodedAccessToken?.exp // Pass access token's exp (optional)
+			)
 			set.status = 204
 		},
 		{
 			body: RefreshTokenSchema,
 			detail: {
 				summary: 'Logout a User',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
+		},
+		{
+			detail: {
+				summary: 'Revoke All User Sessions',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.get(
+		'/sessions/me',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			const sessions = await AuthService.getActiveSessions(user.id)
+			return { sessions }
+		},
+		{
+			detail: {
+				summary: 'Get My Active Sessions',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
+		},
+		{
+			detail: {
+				summary: 'Revoke All User Sessions',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
+		},
+		{
+			detail: {
+				summary: 'Revoke All User Sessions',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
+		},
+		{
+			detail: {
+				summary: 'Revoke All User Sessions',
 				tags: ['Authentication']
 			}
 		}
@@ -170,20 +384,41 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 			}
 		}
 	)
-	.get(
-		'/sessions/me',
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
 		async ({ jwt, bearer, set }) => {
 			const user = await jwt.verify(bearer)
 			if (!user) {
 				set.status = 401
 				return { message: 'Unauthorized' }
 			}
-			const sessions = await AuthService.getActiveSessions(user.id)
-			return { sessions }
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
 		},
 		{
 			detail: {
-				summary: 'Get My Active Sessions',
+				summary: 'Revoke All User Sessions',
 				tags: ['Authentication']
 			}
 		}
@@ -222,6 +457,45 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
 		{
 			detail: {
 				summary: 'Get All Active Sessions (Admin Only)',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-session',
+		async ({ body, jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeSession(user.id, body.sessionId)
+			set.status = 204
+		},
+		{
+			body: t.Object({
+				sessionId: t.String()
+			}),
+			detail: {
+				summary: 'Revoke a Specific User Session',
+				tags: ['Authentication']
+			}
+		}
+	)
+	.post(
+		'/revoke-all-sessions',
+		async ({ jwt, bearer, set }) => {
+			const user = await jwt.verify(bearer)
+			if (!user) {
+				set.status = 401
+				return { message: 'Unauthorized' }
+			}
+			await AuthService.revokeAllSessions(user.id)
+			set.status = 204
+		},
+		{
+			detail: {
+				summary: 'Revoke All User Sessions',
 				tags: ['Authentication']
 			}
 		}

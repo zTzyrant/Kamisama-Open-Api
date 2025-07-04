@@ -20,6 +20,7 @@ model User {
     updatedAt DateTime  @updatedAt
     deletedAt DateTime?
     tokens    Token[]
+    sessions  UserSession[]
 }
 
 model IpaymuTestAccount {
@@ -34,13 +35,15 @@ model IpaymuTestAccount {
 
 model Token {
     id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    token     String   @unique
+    token     String
+    jti       String   @unique // Unique ID for the refresh token
     userId    String   @db.ObjectId
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     isRevoked Boolean  @default(false)
     expiresAt DateTime
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+    session   UserSession? // Add this line
 }
 
 model RevokedAccessToken {
@@ -48,6 +51,23 @@ model RevokedAccessToken {
     jti       String   @unique
     expiresAt DateTime
     createdAt DateTime @default(now())
+}
+
+model UserSession {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    userId    String   @db.ObjectId
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    tokenId   String   @unique @db.ObjectId
+    token     Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+    device    String
+    deviceId  String?
+    ip        String?
+    lat       Float?
+    long      Float?
+    createdAt DateTime @default(now())
+    expiresAt DateTime
+
+    @@index([userId])
 }
 
 model Role {
