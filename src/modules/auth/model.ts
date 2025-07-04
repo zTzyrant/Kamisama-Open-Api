@@ -40,5 +40,15 @@ export const RegisterUserSchema = t.Object({
 	})
 })
 
+export const LoginUserSchema = t.Object({
+	username: t.String(),
+	password: t.String()
+})
+
+export const RefreshTokenSchema = t.Object({
+	refreshToken: t.String()
+})
+
 // Tipe data TypeScript untuk digunakan di service
 export type RegisterUserDto = typeof RegisterUserSchema.static
+export type LoginUserDto = typeof LoginUserSchema.static
