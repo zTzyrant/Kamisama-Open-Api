@@ -2,14 +2,14 @@ import { Elysia, t } from 'elysia'
 import { swagger } from '@elysiajs/swagger'
 import { ipaymuVendor } from './modules/vendor/ipaymu'
 import { cors } from '@elysiajs/cors'
-import { auth, OpenAPI } from './lib/auth'
+import { auth, OpenAPI } from './libs/auth'
 
 const app = new Elysia()
 
 app
 	.use(
 		cors({
-			origin: 'http://localhost:5173',
+			origin: ['http://localhost:3000', 'http://localhost:5173'],
 			methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],
 			credentials: true

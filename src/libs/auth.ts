@@ -2,6 +2,13 @@ import { BetterAuthError, betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { PrismaClient } from '@prisma/client'
 import { openAPI, username, admin, organization } from 'better-auth/plugins'
+import {
+	ac,
+	user,
+	admin as adminAc,
+	superAdmin,
+	kamisama
+} from '../modules/auth/permissions'
 
 const prisma = new PrismaClient()
 
@@ -16,8 +23,25 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true
 	},
-	plugins: [openAPI(), username(), admin(), organization()],
-	basePath: '/api/auth'
+	plugins: [
+		openAPI(),
+		username(),
+		admin({
+			ac,
+			roles: {
+				user,
+				admin: adminAc,
+				superAdmin,
+				kamisama
+			},
+			defaultRole: 'user',
+			adminRoles: ['admin', 'superAdmin', 'kamisama']
+		}),
+		organization()
+	],
+	basePath: '/api/auth',
+	baseURL: 'http://localhost:3000',
+	trustedOrigins: ['http://localhost:5173']
 })
 
 let _schema: ReturnType<typeof auth.api.generateOpenAPISchema>
