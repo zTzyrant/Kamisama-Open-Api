@@ -6,6 +6,8 @@
 		"dev": "bun run --watch src/index.ts",
 		"build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile ./dist/index ./src/index.ts",
 		"start": "bun run --watch src/index.ts",
+		"auth:generate": "bun x @better-auth/cli generate --config src/libs/auth.ts",
+		"auth:migrate": "bun x @better-auth/cli migrate",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:studio": "prisma studio",

@@ -2,6 +2,8 @@ import { BetterAuthError, betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { PrismaClient } from '@prisma/client'
 import { openAPI, username, admin, organization } from 'better-auth/plugins'
+import { z } from 'zod'
+
 import {
 	ac,
 	user,
@@ -11,6 +13,16 @@ import {
 } from '../modules/auth/permissions'
 
 const prisma = new PrismaClient()
+
+const CustomSignupBodySchema = z.object({
+	email: z.string().email({ message: 'Invalid email address' }),
+	password: z
+		.string()
+		.min(8, { message: 'Password must be at least 8 characters long' }),
+	jobs: z
+		.array(z.string())
+		.min(1, { message: 'Jobs field is required and cannot be empty' })
+})
 
 export const auth = betterAuth({
 	database: prismaAdapter(prisma, {
@@ -44,6 +56,7 @@ export const auth = betterAuth({
 	trustedOrigins: ['http://localhost:5173']
 })
 
+// ... sisa kode Anda tetap sama
 let _schema: ReturnType<typeof auth.api.generateOpenAPISchema>
 const getSchema = async () => (_schema ??= auth.api.generateOpenAPISchema())
 

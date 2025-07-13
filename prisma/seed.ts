@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, User } from '@prisma/client'
 import { auth } from '../src/libs/auth'
 
 const prisma = new PrismaClient()
-
 // FUNGSI BARU UNTUK MEMBERSIHKAN DATABASE
 const cleanDb = async () => {
 	console.log('Cleaning the database...')
@@ -44,6 +43,31 @@ const seedKamisama = async () => {
 			}
 		})
 		console.log('Successfully created user:', user.user.name)
+		await prisma.profile.upsert({
+			where: { userId: user.user.id },
+			update: {
+				bio: 'The supreme being, creator of all.',
+				avatar: 'https://example.com/kamisama-avatar.jpg',
+				socials: [
+					{
+						media: 'twitter',
+						url: '@kamisama_official'
+					}
+				]
+			},
+			create: {
+				userId: user.user.id,
+				bio: 'The supreme being, creator of all.',
+				avatar: 'https://example.com/kamisama-avatar.jpg',
+				socials: [
+					{
+						media: 'twitter',
+						url: '@kamisama_official'
+					}
+				]
+			}
+		})
+		console.log('Kamisama profile ensured.')
 		return user.user
 	} catch (error: any) {
 		if (error.code === 'P2002') {
@@ -74,15 +98,16 @@ const seedCategories = async () => {
 		{ name: 'Programming', slug: 'programming' },
 		{ name: 'Lifestyle', slug: 'lifestyle' }
 	]
-	const createdCategories = await Promise.all(
-		categoriesData.map((cat) =>
-			prisma.category.upsert({
-				where: { slug: cat.slug },
-				update: {},
-				create: cat
-			})
-		)
-	)
+
+	const createdCategories = []
+	for (const cat of categoriesData) {
+		const category = await prisma.category.upsert({
+			where: { slug: cat.slug },
+			update: {},
+			create: cat
+		})
+		createdCategories.push(category)
+	}
 	console.log('Seeded categories.')
 	return createdCategories
 }
@@ -95,15 +120,16 @@ const seedTags = async () => {
 		{ name: 'Node.js', slug: 'nodejs' },
 		{ name: 'Productivity', slug: 'productivity' }
 	]
-	const createdTags = await Promise.all(
-		tagsData.map((tag) =>
-			prisma.tag.upsert({
-				where: { slug: tag.slug },
-				update: {},
-				create: tag
-			})
-		)
-	)
+
+	const createdTags = []
+	for (const tag of tagsData) {
+		const newTag = await prisma.tag.upsert({
+			where: { slug: tag.slug },
+			update: {},
+			create: tag
+		})
+		createdTags.push(newTag)
+	}
 	console.log('Seeded tags.')
 	return createdTags
 }
@@ -118,48 +144,52 @@ const seedArticles = async (
 		{
 			title: 'The Ultimate Guide to TypeScript',
 			slug: 'ultimate-guide-to-typescript',
-			content: 'This is a deep dive into the world of TypeScript...',
-			excerpt: 'Learn everything you need to know about TypeScript...',
+			content:
+				'This is a deep dive into the world of TypeScript, exploring its features, benefits, and best practices.',
+			excerpt:
+				'Learn everything you need to know about TypeScript in this comprehensive guide.',
 			status: 'PUBLISHED',
 			publishedAt: new Date(),
-			categoryId: categories.find((c) => c.slug === 'programming')?.id,
+			categoryId: categories.find((c) => c.slug === 'programming').id,
 			tagIds: [
-				tags.find((t) => t.slug === 'typescript')?.id,
-				tags.find((t) => t.slug === 'javascript')?.id
-			].filter(Boolean)
+				tags.find((t) => t.slug === 'typescript').id,
+				tags.find((t) => t.slug === 'javascript').id
+			]
 		},
 		{
 			title: 'Boosting Productivity for Developers',
 			slug: 'boosting-productivity-for-developers',
-			content: 'Discover tips and tricks to enhance your productivity...',
-			excerpt: 'Stop wasting time and start coding more efficiently...',
+			content:
+				'Discover tips and tricks to enhance your productivity as a software developer. From tools to techniques, we cover it all.',
+			excerpt:
+				'Stop wasting time and start coding more efficiently with these productivity hacks.',
 			status: 'PUBLISHED',
 			publishedAt: new Date(),
-			categoryId: categories.find((c) => c.slug === 'lifestyle')?.id,
-			tagIds: [tags.find((t) => t.slug === 'productivity')?.id].filter(Boolean)
+			categoryId: categories.find((c) => c.slug === 'lifestyle').id,
+			tagIds: [tags.find((t) => t.slug === 'productivity').id]
+		},
+		{
+			title: 'Getting Started with Node.js',
+			slug: 'getting-started-with-nodejs',
+			content:
+				'A beginner-friendly introduction to Node.js. We will build a simple web server from scratch.',
+			excerpt: 'Your first steps into backend development with Node.js.',
+			status: 'DRAFT',
+			categoryId: categories.find((c) => c.slug === 'programming').id,
+			tagIds: [
+				tags.find((t) => t.slug === 'nodejs').id,
+				tags.find((t) => t.slug === 'javascript').id
+			]
 		}
 	]
 
 	for (const article of articlesData) {
-		if (!article.categoryId) {
-			console.warn(
-				`Skipping article "${article.title}" due to missing category.`
-			)
-			continue
-		}
 		await prisma.article.upsert({
 			where: { slug: article.slug },
 			update: {},
 			create: {
-				title: article.title,
-				slug: article.slug,
-				content: article.content,
-				excerpt: article.excerpt,
-				status: article.status,
-				publishedAt: article.publishedAt,
-				authorId: authorId,
-				categoryId: article.categoryId,
-				tagIds: article.tagIds as string[]
+				...article,
+				authorId: authorId
 			}
 		})
 	}
@@ -167,14 +197,8 @@ const seedArticles = async (
 }
 
 async function main() {
-	await cleanDb() // BERSIHKAN DB SEBELUM SEEDING
-
+	await cleanDb()
 	const kamisama = await seedKamisama()
-	if (!kamisama) {
-		console.error('Could not create or find kamisama user. Aborting seed.')
-		process.exit(1)
-	}
-
 	const categories = await seedCategories()
 	const tags = await seedTags()
 	await seedArticles(kamisama.id, categories, tags)
@@ -184,7 +208,6 @@ async function main() {
 
 main()
 	.catch((e) => {
-		console.error('An error occurred during the seed process:')
 		console.error(e)
 		process.exit(1)
 	})

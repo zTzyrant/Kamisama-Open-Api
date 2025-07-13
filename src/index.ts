@@ -7,6 +7,7 @@ import { ArticleRoutes } from './modules/articles/index'
 import { TagRoutes } from './modules/tags'
 import { CategoryRoutes } from './modules/categories'
 import { betterAuth } from './modules/auth/macros'
+import { ProfileRoutes } from './modules/profile'
 
 export const app = new Elysia()
 
@@ -65,6 +66,7 @@ app
 	.use(ArticleRoutes)
 	.use(TagRoutes)
 	.use(CategoryRoutes)
+	.use(ProfileRoutes)
 	.listen(process.env.PORT ?? 3000)
 
 console.log(
