@@ -3,8 +3,12 @@ import { swagger } from '@elysiajs/swagger'
 import { ipaymuVendor } from './modules/vendor/ipaymu'
 import { cors } from '@elysiajs/cors'
 import { auth, OpenAPI } from './libs/auth'
+import { ArticleRoutes } from './modules/articles/index'
+import { TagRoutes } from './modules/tags'
+import { CategoryRoutes } from './modules/categories'
+import { betterAuth } from './modules/auth/macros'
 
-const app = new Elysia()
+export const app = new Elysia()
 
 app
 	.use(
@@ -15,7 +19,14 @@ app
 			credentials: true
 		})
 	)
-	.mount('/', auth.handler)
+	.use(betterAuth)
+	.get('/user', ({ user }) => user, {
+		auth: true,
+		detail: {
+			tags: ['Authentication'],
+			description: 'Get user data'
+		}
+	})
 	.use(
 		swagger({
 			documentation: {
@@ -51,6 +62,9 @@ app
 		}
 	)
 	.group('/api/v1', (app) => app.use(ipaymuVendor))
+	.use(ArticleRoutes)
+	.use(TagRoutes)
+	.use(CategoryRoutes)
 	.listen(process.env.PORT ?? 3000)
 
 console.log(

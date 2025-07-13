@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,7 +8,7 @@ datasource db {
 }
 
 model User {
-  id              String       @id @map("_id")
+  id              String        @id @map("_id")
   name            String
   email           String
   emailVerified   Boolean
@@ -26,6 +25,9 @@ model User {
   accounts        Account[]
   members         Member[]
   invitations     Invitation[]
+  Profile         Profile?
+  Article         Article[]
+  ArticleView     ArticleView[]
 
   @@unique([email])
   @@unique([username])
@@ -117,4 +119,67 @@ model Invitation {
   user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
   @@map("invitation")
+}
+
+// ===============================================
+// Model untuk Konten & Aplikasi
+// ===============================================
+
+// Menyimpan data tambahan pengguna
+model Profile {
+  id     String  @id @map("_id") @default(uuid())
+  bio    String?
+  avatar String?
+  userId String  @unique
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Mengelompokkan artikel
+model Category {
+  id     String  @id @map("_id") @default(uuid())
+  name     String    @unique
+  slug     String    @unique
+  articles Article[]
+}
+
+// Label fleksibel untuk artikel
+model Tag {
+  id     String  @id @map("_id") @default(uuid())
+  name       String    @unique
+  slug       String    @unique
+  articles   Article[] @relation(fields: [articleIds], references: [id])
+  articleIds String[]
+}
+
+// Entitas utama untuk konten tulisan
+model Article {
+  id     String  @id @map("_id") @default(uuid())
+  title       String
+  slug        String    @unique
+  content     String
+  excerpt     String?
+  coverImage  String?
+  status      String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+  tags       Tag[]    @relation(fields: [tagIds], references: [id])
+  tagIds     String[]
+
+  views ArticleView[]
+}
+
+// Mencatat analitik view artikel
+model ArticleView {
+  id     String  @id @map("_id") @default(uuid())
+  viewedAt  DateTime @default(now())
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
 }
