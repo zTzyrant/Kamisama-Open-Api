@@ -9,6 +9,7 @@ interface GetArticlesOptions {
 	search?: string
 	tags?: string // comma-separated tag IDs
 	category?: string // category ID
+	status?: string // Add status filter
 	sortBy?: 'createdAt' | 'views'
 	orderBy?: 'asc' | 'desc'
 	authorId?: string
@@ -22,6 +23,7 @@ export const findArticles = async (options: GetArticlesOptions) => {
 		search,
 		tags,
 		category,
+		status,
 		sortBy = 'createdAt',
 		orderBy = 'desc',
 		authorId
@@ -59,6 +61,10 @@ export const findArticles = async (options: GetArticlesOptions) => {
 				}
 			}
 		}
+	}
+
+	if (status) {
+		where.status = status
 	}
 
 	const orderByClause: Prisma.ArticleOrderByWithRelationInput = {}
@@ -134,24 +140,135 @@ export const getArticleById = async (id: string) => {
 	}
 }
 
+export const getArticleBySlug = async (slug: string) => {
+	const articleData = await prisma.article.findUnique({
+		where: {
+			slug
+		},
+		include: {
+			author: {
+				select: { id: true, name: true, image: true }
+			},
+			category: {
+				select: { id: true, name: true, slug: true }
+			},
+			tags: {
+				select: { id: true, name: true, slug: true }
+			},
+			_count: {
+				select: { views: true }
+			}
+		}
+	})
+
+	if (!articleData) return null
+
+	const { _count, ...article } = articleData
+	return {
+		...article,
+		views: _count.views
+	}
+}
+
+export const recordArticleView = async (
+	articleId: string,
+	viewerIp: string,
+	userAgent?: string,
+	referer?: string,
+	userId?: string
+) => {
+	const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+	const existingView = await prisma.articleView.findFirst({
+		where: {
+			articleId: articleId,
+			viewerIp: viewerIp,
+			viewedAt: {
+				gte: sevenDaysAgo
+			}
+		}
+	})
+
+	if (!existingView) {
+		await prisma.articleView.create({
+			data: {
+				articleId: articleId,
+				viewerIp: viewerIp,
+				userAgent: userAgent || null,
+				referer: referer || null,
+				userId: userId || null,
+				viewedAt: new Date()
+			}
+		})
+	}
+}
+
 export const createArticle = async (
 	data: CreateArticleModel,
 	authorId: string
 ) => {
-	return await prisma.article.create({
-		data: {
-			...data,
-			authorId
+	const { status, categoryId, tagIds, ...rest } = data
+
+	const articleCreateData: Prisma.ArticleCreateInput = {
+		...rest,
+		author: {
+			connect: { id: authorId }
 		}
+	}
+
+	if (categoryId) {
+		const categoryExists = await prisma.category.findUnique({
+			where: { id: categoryId }
+		})
+		if (!categoryExists) {
+			throw new Error('Category not found')
+		}
+		articleCreateData.category = { connect: { id: categoryId } }
+	}
+
+	if (tagIds && tagIds.length > 0) {
+		const existingTags = await prisma.tag.findMany({
+			where: { id: { in: tagIds } }
+		})
+		if (existingTags.length !== tagIds.length) {
+			throw new Error('One or more tags not found')
+		}
+		articleCreateData.tags = { connect: tagIds.map((id) => ({ id })) }
+	}
+
+	if (status !== undefined) {
+		articleCreateData.status = status
+	}
+
+	return await prisma.article.create({
+		data: articleCreateData
 	})
 }
 
 export const updateArticle = async (id: string, data: UpdateArticleModel) => {
+	const { status, categoryId, tagIds, ...rest } = data
+
+	const articleUpdateData: Prisma.ArticleUpdateInput = { ...rest }
+
+	if (status !== undefined) {
+		articleUpdateData.status = status
+	}
+
+	if (categoryId !== undefined) {
+		articleUpdateData.category = categoryId
+			? { connect: { id: categoryId } }
+			: { disconnect: true }
+	}
+
+	if (tagIds !== undefined) {
+		articleUpdateData.tags = { set: tagIds.map((id) => ({ id })) }
+	}
+
 	return await prisma.article.update({
 		where: {
 			id
 		},
-		data
+		data: articleUpdateData
 	})
 }
 

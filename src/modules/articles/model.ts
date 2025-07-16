@@ -1,5 +1,7 @@
 import { t } from 'elysia'
 
+export type ArticleStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+
 export const ArticleModel = t.Object({
 	id: t.String(),
 	title: t.String(),
@@ -7,7 +9,7 @@ export const ArticleModel = t.Object({
 	content: t.String(),
 	excerpt: t.Optional(t.String()),
 	coverImage: t.Optional(t.String()),
-	status: t.String(),
+	status: t.String(), // Tetap string untuk model keluar
 	createdAt: t.Date(),
 	updatedAt: t.Date(),
 	publishedAt: t.Optional(t.Date()),
@@ -36,11 +38,9 @@ export const CreateArticleModel = t.Object({
 		})
 	),
 	coverImage: t.Optional(t.String()),
-	status: t.Optional(
-		t.Union([t.Literal('DRAFT'), t.Literal('PUBLISHED'), t.Literal('ARCHIVED')])
-	),
-	categoryId: t.String(),
-	tagIds: t.Array(t.String())
+	status: t.Optional(t.String({ default: 'DRAFT' })),
+	categoryId: t.Optional(t.String()),
+	tagIds: t.Optional(t.Array(t.String()))
 })
 export type CreateArticleModel = typeof CreateArticleModel.static
 
@@ -69,9 +69,7 @@ export const UpdateArticleModel = t.Object({
 		})
 	),
 	coverImage: t.Optional(t.String()),
-	status: t.Optional(
-		t.Union([t.Literal('DRAFT'), t.Literal('PUBLISHED'), t.Literal('ARCHIVED')])
-	),
+	status: t.Optional(t.String({ default: 'DRAFT' })),
 	categoryId: t.Optional(t.String()),
 	tagIds: t.Optional(t.Array(t.String()))
 })

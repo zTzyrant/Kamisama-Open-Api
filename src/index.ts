@@ -63,7 +63,6 @@ app
 		}
 	)
 	.group('/api/v1', (app) => app.use(ipaymuVendor))
-	.use(ArticleRoutes)
 	.use(TagRoutes)
 	.use(CategoryRoutes)
 	.use(ProfileRoutes)

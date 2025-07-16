@@ -1,4 +1,4 @@
-import { BetterAuthError, betterAuth } from 'better-auth'
+import { BetterAuthError, User, betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { PrismaClient } from '@prisma/client'
 import { openAPI, username, admin, organization } from 'better-auth/plugins'
@@ -34,6 +34,27 @@ export const auth = betterAuth({
 	},
 	emailAndPassword: {
 		enabled: true
+	},
+	databaseHooks: {
+		user: {
+			create: {
+				after: async (user) => {
+					await prisma.profile.create({
+						data: {
+							userId: user.id,
+							bio: null,
+							avatar: null,
+							jobs: [],
+							socials: [],
+							nationality: null,
+							website: null,
+							address: null,
+							phone: null
+						}
+					})
+				}
+			}
+		}
 	},
 	plugins: [
 		openAPI(),

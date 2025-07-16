@@ -177,8 +177,8 @@ model Article {
 
   author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId   String
-  category   Category @relation(fields: [categoryId], references: [id])
-  categoryId String
+  category   Category? @relation(fields: [categoryId], references: [id])
+  categoryId String?
   tags       Tag[]    @relation(fields: [tagIds], references: [id])
   tagIds     String[]
 
@@ -194,4 +194,7 @@ model ArticleView {
   articleId String
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId    String?
+  viewerIp  String?
+  userAgent String?
+  referer   String?
 }
