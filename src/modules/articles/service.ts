@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import type { CreateArticleModel, UpdateArticleModel } from './model'
 import { generateSlug } from '../../utils/slug'
+import { sanitizeEditorJsContent } from '../../utils/xss'
 
 const prisma = new PrismaClient()
 
@@ -276,7 +277,7 @@ export const createArticle = async (
 	const articleCreateData: Prisma.ArticleCreateInput = {
 		title: data.title,
 		slug: articleSlug,
-		content: data.content,
+		content: sanitizeEditorJsContent(data.content),
 		author: { connect: { id: authorId } },
 		status: { connect: { id: finalStatusId } },
 		lang: { connect: { id: finalLangId } },
@@ -304,7 +305,7 @@ export const createArticle = async (
 }
 
 export const updateArticle = async (id: string, data: UpdateArticleModel) => {
-	const { statusId, langId, categoryId, tagIds, excerpt, coverImage, slug, ...rest } = data
+	const { statusId, langId, categoryId, tagIds, excerpt, coverImage, slug, content, ...rest } = data
 
 	const existingArticle = await prisma.article.findUnique({ where: { id } })
 	if (!existingArticle) {
@@ -326,6 +327,10 @@ export const updateArticle = async (id: string, data: UpdateArticleModel) => {
 		// However, slug is a required field in Prisma, so we should prevent this or handle it.
 		// For now, let's throw an error or ignore the update for slug.
 		throw new Error('Slug cannot be set to null.')
+	}
+
+	if (content !== undefined) {
+		articleUpdateData.content = sanitizeEditorJsContent(content);
 	}
 
 	if (excerpt !== undefined) {

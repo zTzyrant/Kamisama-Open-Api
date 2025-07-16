@@ -8,6 +8,7 @@ import { TagRoutes } from './modules/tags'
 import { CategoryRoutes } from './modules/categories'
 import { LanguageRoutes } from './modules/languages'
 import { ArticleStatusRoutes } from './modules/article-statuses'
+import { UploadRoutes } from './modules/uploads'
 import { betterAuth } from './modules/auth/macros'
 import { ProfileRoutes } from './modules/profile'
 
@@ -73,6 +74,7 @@ app
 	.use(ProfileRoutes)
 	.use(LanguageRoutes)
 	.use(ArticleStatusRoutes)
+	.use(UploadRoutes)
 	.listen(process.env.PORT ?? 3000)
 
 console.log(

@@ -26,7 +26,8 @@
 		"better-auth": "^1.2.12",
 		"crypto-js": "^4.2.0",
 		"elysia": "latest",
-		"prisma": "^6.11.1"
+		"prisma": "^6.11.1",
+		"xss": "^1.0.15"
 	},
 	"devDependencies": {
 		"bun-types": "latest"
