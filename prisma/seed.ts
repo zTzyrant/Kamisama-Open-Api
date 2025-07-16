@@ -134,10 +134,53 @@ const seedTags = async () => {
 	return createdTags
 }
 
+const seedArticleStatuses = async () => {
+	console.log('Seeding article statuses...')
+	const statusesData = [
+		{ name: 'Draft', slug: 'draft' },
+		{ name: 'Published', slug: 'published' },
+		{ name: 'Archived', slug: 'archived' }
+	]
+
+	const createdStatuses = []
+	for (const status of statusesData) {
+		const newStatus = await prisma.articleStatus.upsert({
+			where: { slug: status.slug },
+			update: {},
+			create: status
+		})
+		createdStatuses.push(newStatus)
+	}
+	console.log('Seeded article statuses.')
+	return createdStatuses
+}
+
+const seedLanguages = async () => {
+	console.log('Seeding languages...')
+	const languagesData = [
+		{ name: 'Indonesian', slug: 'id' },
+		{ name: 'English', slug: 'en' }
+	]
+
+	const createdLanguages = []
+	for (const lang of languagesData) {
+		const newLang = await prisma.language.upsert({
+			where: { slug: lang.slug },
+			update: {},
+			create: lang
+		})
+		createdLanguages.push(newLang)
+	}
+	console.log('Seeded languages.')
+	return createdLanguages
+}
+
 const seedArticles = async (
 	authorId: string,
 	categories: any[],
-	tags: any[]
+	tags: any[],
+	articleStatuses: any[],
+	languages: any[]
 ) => {
 	console.log('Seeding articles...')
 	const articlesData = [
@@ -148,7 +191,8 @@ const seedArticles = async (
 				'This is a deep dive into the world of TypeScript, exploring its features, benefits, and best practices.',
 			excerpt:
 				'Learn everything you need to know about TypeScript in this comprehensive guide.',
-			status: 'PUBLISHED',
+			statusId: articleStatuses.find((s) => s.slug === 'published').id,
+			langId: languages.find((l) => l.slug === 'en').id,
 			publishedAt: new Date(),
 			categoryId: categories.find((c) => c.slug === 'programming').id,
 			tagIds: [
@@ -163,7 +207,8 @@ const seedArticles = async (
 				'Discover tips and tricks to enhance your productivity as a software developer. From tools to techniques, we cover it all.',
 			excerpt:
 				'Stop wasting time and start coding more efficiently with these productivity hacks.',
-			status: 'PUBLISHED',
+			statusId: articleStatuses.find((s) => s.slug === 'published').id,
+			langId: languages.find((l) => l.slug === 'en').id,
 			publishedAt: new Date(),
 			categoryId: categories.find((c) => c.slug === 'lifestyle').id,
 			tagIds: [tags.find((t) => t.slug === 'productivity').id]
@@ -174,7 +219,8 @@ const seedArticles = async (
 			content:
 				'A beginner-friendly introduction to Node.js. We will build a simple web server from scratch.',
 			excerpt: 'Your first steps into backend development with Node.js.',
-			status: 'DRAFT',
+			statusId: articleStatuses.find((s) => s.slug === 'draft').id,
+			langId: languages.find((l) => l.slug === 'en').id,
 			categoryId: categories.find((c) => c.slug === 'programming').id,
 			tagIds: [
 				tags.find((t) => t.slug === 'nodejs').id,
@@ -201,7 +247,9 @@ async function main() {
 	const kamisama = await seedKamisama()
 	const categories = await seedCategories()
 	const tags = await seedTags()
-	await seedArticles(kamisama.id, categories, tags)
+	const articleStatuses = await seedArticleStatuses()
+	const languages = await seedLanguages()
+	await seedArticles(kamisama.id, categories, tags, articleStatuses, languages)
 
 	console.log('\nSeeding finished successfully! 🌱')
 }

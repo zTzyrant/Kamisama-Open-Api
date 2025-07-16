@@ -12,9 +12,11 @@ import {
 import {
 	CreateArticleModel,
 	UpdateArticleModel,
-	GetArticlesQueryModel,
-	ArticleStatus
+	GetArticlesQueryModel
 } from './model'
+
+import { getArticleStatusBySlug } from '../article-statuses/service'
+import { getLanguageBySlug } from '../languages/service'
 
 // Helper to construct pagination URLs
 const buildPaginationUrls = (
@@ -113,6 +115,14 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						description: 'A category ID to filter articles by.',
 						example: 'categoryId1'
 					},
+					statusId: {
+						description: 'An article status ID to filter articles by.',
+						example: 'statusId1'
+					},
+					langId: {
+						description: 'A language ID to filter articles by.',
+						example: 'langId1'
+					},
 					sortBy: {
 						description: 'The field to sort the articles by.',
 						example: 'createdAt'
@@ -178,7 +188,7 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						example: 10
 					},
 					search: {
-						description:
+							description:
 							'A search term to filter articles by title, content, or excerpt.',
 						example: 'Technology'
 					},
@@ -190,6 +200,14 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 					category: {
 						description: 'A category ID to filter articles by.',
 						example: 'categoryId1'
+					},
+					statusId: {
+						description: 'An article status ID to filter articles by.',
+						example: 'statusId1'
+					},
+					langId: {
+						description: 'A language ID to filter articles by.',
+						example: 'langId1'
 					},
 					sortBy: {
 						description: 'The field to sort the articles by.',
@@ -228,23 +246,25 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			}
 		}
 	)
-	// GET articles by status
+	
+	// GET articles by status slug
 	.get(
-		'/status/:status',
-		async ({ params: { status: string }, query, request, status }) => {
+		'/status/:statusSlug',
+		async ({ params: { statusSlug }, query, request, status }) => {
 			const { page = 1, limit = 10, ...filters } = query
 
-			if (!(['DRAFT', 'PUBLISHED', 'ARCHIVED'] as ArticleStatus[]).includes(articleStatus)) {
+			const articleStatus = await getArticleStatusBySlug(statusSlug)
+			if (!articleStatus) {
 				return status(400, {
 					status: 400,
-					message: 'Invalid article status'
+					message: 'Invalid article status slug'
 				})
 			}
 
 			const { articles, total } = await findArticles({
 				page,
 				limit,
-				status: articleStatus as ArticleStatus,
+				statusId: articleStatus.id,
 				...filters
 			})
 
@@ -259,9 +279,9 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 
 			return status(200, {
 				status: 200,
-				message: `Articles with status ${articleStatus} retrieved successfully`,
+				message: `Articles with status ${articleStatus.name} retrieved successfully`,
 				data: articles,
-				pagination: {
+				pagenation: {
 					currentPage: page,
 					totalPages,
 					totalItems: total,
@@ -276,15 +296,13 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description:
-					'Get articles by status with pagination, filtering, and sorting',
-				summary: 'Get articles by status',
+					'Get articles by status slug with pagination, filtering, and sorting',
+				summary: 'Get articles by status slug',
 				params: {
-					status: {
+					statusSlug: {
 						type: 'string',
-						enum: Object.values(ArticleStatus),
-						description:
-							'The status of the articles to retrieve (DRAFT, PUBLISHED, ARCHIVED)',
-						example: 'PUBLISHED'
+						description: 'The slug of the article status to retrieve (e.g., draft, published, archived)',
+						example: 'published'
 					}
 				},
 				query: {
@@ -297,12 +315,113 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						example: 10
 					},
 					search: {
-						description:
+							description:
 							'A search term to filter articles by title, content, or excerpt.',
 						example: 'Technology'
 					},
 					tags: {
-						description:
+							description:
+							'A comma-separated list of tag IDs to filter articles by.',
+						example: 'tagId1,tagId2'
+					},
+					category: {
+						description: 'A category ID to filter articles by.',
+						example: 'categoryId1'
+					},
+					statusId: {
+						description: 'An article status ID to filter articles by.',
+						example: 'statusId1'
+					},
+					langId: {
+						description: 'A language ID to filter articles by.',
+						example: 'langId1'
+					},
+					sortBy: {
+						description: 'The field to sort the articles by.',
+						example: 'createdAt'
+					},
+					orderBy: {
+						description: 'The order to sort the articles in.',
+						example: 'desc'
+					}
+				}
+			}
+		}
+	)
+	// GET articles by language slug
+	.get(
+		'/lang/:langSlug',
+		async ({ params: { langSlug }, query, request, status }) => {
+			const { page = 1, limit = 10, ...filters } = query
+
+			const language = await getLanguageBySlug(langSlug)
+			if (!language) {
+				return status(400, {
+					status: 400,
+					message: 'Invalid language slug'
+				})
+			}
+
+			const { articles, total } = await findArticles({
+				page,
+				limit,
+				langId: language.id,
+				...filters
+			})
+
+			const baseUrl = `${request.url.split('?')[0]}`
+			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
+				baseUrl,
+				page,
+				limit,
+				total,
+				query
+			)
+
+			return status(200, {
+				status: 200,
+				message: `Articles in language ${language.name} retrieved successfully`,
+				data: articles,
+				pagenation: {
+					currentPage: page,
+					totalPages,
+					totalItems: total,
+					perPage: limit,
+					nextPageUrl,
+					prevPageUrl
+				}
+			})
+		},
+		{
+			query: GetArticlesQueryModel,
+			detail: {
+				tags: ['Articles'],
+				description:
+					'Get articles by language slug with pagination, filtering, and sorting',
+				summary: 'Get articles by language slug',
+				params: {
+					langSlug: {
+						type: 'string',
+						description: 'The slug of the language to retrieve (e.g., en, id)',
+						example: 'en'
+					}
+				},
+				query: {
+					page: {
+						description: 'The page number to retrieve.',
+						example: 1
+					},
+					limit: {
+						description: 'The number of items to retrieve per page.',
+						example: 10
+					},
+					search: {
+							description:
+							'A search term to filter articles by title, content, or excerpt.',
+						example: 'Technology'
+					},
+					tags: {
+							description:
 							'A comma-separated list of tag IDs to filter articles by.',
 						example: 'tagId1,tagId2'
 					},
@@ -359,99 +478,6 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 				tags: ['Articles'],
 				description: 'Get an article by its slug',
 				summary: 'Get article by slug'
-			}
-		}
-	)
-	// GET articles by status
-	.get(
-		'/status/:status',
-		async ({ params: { status: articleStatus }, query, request, status }) => {
-			const { page = 1, limit = 10, ...filters } = query
-
-			if (!Object.values(ArticleStatus).includes(articleStatus as ArticleStatus)) {
-				return status(400, {
-					status: 400,
-					message: 'Invalid article status'
-				})
-			}
-
-			const { articles, total } = await findArticles({
-				page,
-				limit,
-				...filters
-			})
-
-			const baseUrl = `${request.url.split('?')[0]}`
-			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
-				baseUrl,
-				page,
-				limit,
-				total,
-				query
-			)
-
-			return status(200, {
-				status: 200,
-				message: `Articles retrieved successfully`,
-				data: articles,
-				pagination: {
-					currentPage: page,
-					totalPages,
-					totalItems: total,
-					perPage: limit,
-					nextPageUrl,
-					prevPageUrl
-				}
-			})
-		},
-		{
-			query: GetArticlesQueryModel,
-			detail: {
-				tags: ['Articles'],
-				description:
-					'Get articles by status with pagination, filtering, and sorting',
-				summary: 'Get articles by status',
-				params: {
-					status: {
-						type: 'string',
-						enum: Object.values(ArticleStatus),
-						description:
-							'The status of the articles to retrieve (DRAFT, PUBLISHED, ARCHIVED)',
-						example: 'PUBLISHED'
-					}
-				},
-				query: {
-					page: {
-						description: 'The page number to retrieve.',
-						example: 1
-					},
-					limit: {
-						description: 'The number of items to retrieve per page.',
-						example: 10
-					},
-					search: {
-						description:
-							'A search term to filter articles by title, content, or excerpt.',
-						example: 'Technology'
-					},
-					tags: {
-						description:
-							'A comma-separated list of tag IDs to filter articles by.',
-						example: 'tagId1,tagId2'
-					},
-					category: {
-						description: 'A category ID to filter articles by.',
-						example: 'categoryId1'
-					},
-					sortBy: {
-						description: 'The field to sort the articles by.',
-						example: 'createdAt'
-					},
-					orderBy: {
-						description: 'The order to sort the articles in.',
-						example: 'desc'
-					}
-				}
 			}
 		}
 	)

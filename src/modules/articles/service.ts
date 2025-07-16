@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 import type { CreateArticleModel, UpdateArticleModel } from './model'
+import { generateSlug } from '../../utils/slug'
 
 const prisma = new PrismaClient()
 
@@ -9,10 +10,33 @@ interface GetArticlesOptions {
 	search?: string
 	tags?: string // comma-separated tag IDs
 	category?: string // category ID
-	status?: string // Add status filter
+	statusId?: string // Add status filter
+	langId?: string // Add language filter
 	sortBy?: 'createdAt' | 'views'
 	orderBy?: 'asc' | 'desc'
 	authorId?: string
+}
+
+const getDefaultArticleStatusId = async () => {
+	const defaultStatus = await prisma.articleStatus.findUnique({
+		where: { slug: 'draft' },
+		select: { id: true }
+	})
+	if (!defaultStatus) {
+		throw new Error('Default article status (draft) not found.')
+	}
+	return defaultStatus.id
+}
+
+const getDefaultLanguageId = async () => {
+	const defaultLang = await prisma.language.findUnique({
+		where: { slug: 'id' },
+		select: { id: true }
+	})
+	if (!defaultLang) {
+		throw new Error('Default language (id) not found.')
+	}
+	return defaultLang.id
 }
 
 // A single function to get articles with all the filters and options
@@ -23,7 +47,8 @@ export const findArticles = async (options: GetArticlesOptions) => {
 		search,
 		tags,
 		category,
-		status,
+		statusId,
+		langId,
 		sortBy = 'createdAt',
 		orderBy = 'desc',
 		authorId
@@ -63,8 +88,12 @@ export const findArticles = async (options: GetArticlesOptions) => {
 		}
 	}
 
-	if (status) {
-		where.status = status
+	if (statusId) {
+		where.statusId = statusId
+	}
+
+	if (langId) {
+		where.langId = langId
 	}
 
 	const orderByClause: Prisma.ArticleOrderByWithRelationInput = {}
@@ -91,6 +120,12 @@ export const findArticles = async (options: GetArticlesOptions) => {
 					select: { id: true, name: true, slug: true }
 				},
 				tags: {
+					select: { id: true, name: true, slug: true }
+				},
+				status: {
+					select: { id: true, name: true, slug: true }
+				},
+				lang: {
 					select: { id: true, name: true, slug: true }
 				},
 				_count: {
@@ -125,6 +160,12 @@ export const getArticleById = async (id: string) => {
 			tags: {
 				select: { id: true, name: true, slug: true }
 			},
+			status: {
+				select: { id: true, name: true, slug: true }
+			},
+			lang: {
+				select: { id: true, name: true, slug: true }
+			},
 			_count: {
 				select: { views: true }
 			}
@@ -153,6 +194,12 @@ export const getArticleBySlug = async (slug: string) => {
 				select: { id: true, name: true, slug: true }
 			},
 			tags: {
+				select: { id: true, name: true, slug: true }
+			},
+			status: {
+				select: { id: true, name: true, slug: true }
+			},
+			lang: {
 				select: { id: true, name: true, slug: true }
 			},
 			_count: {
@@ -207,51 +254,93 @@ export const createArticle = async (
 	data: CreateArticleModel,
 	authorId: string
 ) => {
-	const { status, categoryId, tagIds, ...rest } = data
+	const finalStatusId = data.statusId || (await getDefaultArticleStatusId());
+	const finalLangId = data.langId || (await getDefaultLanguageId());
+
+	let articleSlug = data.slug;
+	if (!articleSlug) {
+		const date = new Date();
+		const year = date.getFullYear();
+		const month = (date.getMonth() + 1).toString().padStart(2, '0');
+		const day = date.getDate().toString().padStart(2, '0');
+		const baseSlug = generateSlug(data.title);
+		let uniqueSlug = `${baseSlug}-${year}-${month}-${day}`;
+		let counter = 0;
+		while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
+			counter++;
+			uniqueSlug = `${baseSlug}-${year}-${month}-${day}-${counter}`;
+		}
+		articleSlug = uniqueSlug;
+	}
 
 	const articleCreateData: Prisma.ArticleCreateInput = {
-		...rest,
-		author: {
-			connect: { id: authorId }
-		}
+		title: data.title,
+		slug: articleSlug,
+		content: data.content,
+		author: { connect: { id: authorId } },
+		status: { connect: { id: finalStatusId } },
+		lang: { connect: { id: finalLangId } },
+	};
+
+	if (data.excerpt !== null) {
+		articleCreateData.excerpt = data.excerpt;
 	}
 
-	if (categoryId) {
-		const categoryExists = await prisma.category.findUnique({
-			where: { id: categoryId }
-		})
-		if (!categoryExists) {
-			throw new Error('Category not found')
-		}
-		articleCreateData.category = { connect: { id: categoryId } }
+	if (data.coverImage !== null) {
+		articleCreateData.coverImage = data.coverImage;
 	}
 
-	if (tagIds && tagIds.length > 0) {
-		const existingTags = await prisma.tag.findMany({
-			where: { id: { in: tagIds } }
-		})
-		if (existingTags.length !== tagIds.length) {
-			throw new Error('One or more tags not found')
-		}
-		articleCreateData.tags = { connect: tagIds.map((id) => ({ id })) }
+	if (data.categoryId) {
+		articleCreateData.category = { connect: { id: data.categoryId } };
 	}
 
-	if (status !== undefined) {
-		articleCreateData.status = status
+	if (data.tagIds && data.tagIds.length > 0) {
+		articleCreateData.tags = { connect: data.tagIds.map(id => ({ id })) };
 	}
 
 	return await prisma.article.create({
 		data: articleCreateData
-	})
+	});
 }
 
 export const updateArticle = async (id: string, data: UpdateArticleModel) => {
-	const { status, categoryId, tagIds, ...rest } = data
+	const { statusId, langId, categoryId, tagIds, excerpt, coverImage, slug, ...rest } = data
+
+	const existingArticle = await prisma.article.findUnique({ where: { id } })
+	if (!existingArticle) {
+		return null // Or throw an error, depending on desired behavior
+	}
 
 	const articleUpdateData: Prisma.ArticleUpdateInput = { ...rest }
 
-	if (status !== undefined) {
-		articleUpdateData.status = status
+	if (slug !== undefined && slug !== existingArticle.slug) {
+		let newSlug = generateSlug(slug)
+		let counter = 0
+		while (await prisma.article.findUnique({ where: { slug: newSlug } })) {
+			counter++
+			newSlug = `${generateSlug(slug)}-${counter}`
+		}
+		articleUpdateData.slug = newSlug
+	} else if (slug === null) {
+		// If slug is explicitly set to null, it means user wants to clear it.
+		// However, slug is a required field in Prisma, so we should prevent this or handle it.
+		// For now, let's throw an error or ignore the update for slug.
+		throw new Error('Slug cannot be set to null.')
+	}
+
+	if (excerpt !== undefined) {
+		articleUpdateData.excerpt = excerpt
+	}
+	if (coverImage !== undefined) {
+		articleUpdateData.coverImage = coverImage
+	}
+
+	if (statusId !== undefined) {
+		articleUpdateData.status = { connect: { id: statusId } }
+	}
+
+	if (langId !== undefined) {
+		articleUpdateData.lang = { connect: { id: langId } }
 	}
 
 	if (categoryId !== undefined) {
@@ -279,3 +368,4 @@ export const deleteArticle = async (id: string) => {
 		}
 	})
 }
+

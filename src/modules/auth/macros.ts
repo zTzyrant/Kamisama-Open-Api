@@ -10,7 +10,7 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session) return status(401)
+				if (!session || !session.user) return status(401)
 
 				return {
 					user: session.user,
@@ -24,7 +24,7 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session) return status(401)
+				if (!session || !session.user) return status(401)
 
 				if (
 					session.user.role !== 'admin' &&
@@ -44,7 +44,7 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session) return status(401)
+				if (!session || !session.user) return status(401)
 				if (
 					session.user.role !== 'superAdmin' &&
 					session.user.role !== 'kamisama'
@@ -63,7 +63,7 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session) return status(401)
+				if (!session || !session.user) return status(401)
 				if (session.user.role !== 'kamisama') return status(403)
 				return {
 					user: session.user,

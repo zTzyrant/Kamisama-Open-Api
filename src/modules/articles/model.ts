@@ -1,7 +1,5 @@
 import { t } from 'elysia'
 
-export type ArticleStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
-
 export const ArticleModel = t.Object({
 	id: t.String(),
 	title: t.String(),
@@ -9,7 +7,8 @@ export const ArticleModel = t.Object({
 	content: t.String(),
 	excerpt: t.Optional(t.String()),
 	coverImage: t.Optional(t.String()),
-	status: t.String(), // Tetap string untuk model keluar
+	statusId: t.String(),
+	langId: t.String(),
 	createdAt: t.Date(),
 	updatedAt: t.Date(),
 	publishedAt: t.Optional(t.Date()),
@@ -24,21 +23,20 @@ export const CreateArticleModel = t.Object({
 		minLength: 3,
 		maxLength: 100
 	}),
-	slug: t.String({
-		minLength: 3,
-		maxLength: 100
-	}),
+	slug: t.Optional(t.String({
+			minLength: 3,
+			maxLength: 100
+		})),
 	content: t.String({
 		minLength: 3
 	}),
-	excerpt: t.Optional(
-		t.String({
+	excerpt: t.Union([t.String({
 			minLength: 3,
 			maxLength: 255
-		})
-	),
-	coverImage: t.Optional(t.String()),
-	status: t.Optional(t.String({ default: 'DRAFT' })),
+		}), t.Null()]),
+	coverImage: t.Union([t.String(), t.Null()]),
+	statusId: t.String(),
+	langId: t.String(),
 	categoryId: t.Optional(t.String()),
 	tagIds: t.Optional(t.Array(t.String()))
 })
@@ -51,25 +49,22 @@ export const UpdateArticleModel = t.Object({
 			maxLength: 100
 		})
 	),
-	slug: t.Optional(
-		t.String({
+	slug: t.Optional(t.String({
 			minLength: 3,
 			maxLength: 100
-		})
-	),
+		})),
 	content: t.Optional(
 		t.String({
 			minLength: 3
 		})
 	),
-	excerpt: t.Optional(
-		t.String({
+	excerpt: t.Optional(t.Union([t.String({
 			minLength: 3,
 			maxLength: 255
-		})
-	),
-	coverImage: t.Optional(t.String()),
-	status: t.Optional(t.String({ default: 'DRAFT' })),
+		}), t.Null()])),
+	coverImage: t.Optional(t.Union([t.String(), t.Null()])),
+	statusId: t.Optional(t.String()),
+	langId: t.Optional(t.String()),
 	categoryId: t.Optional(t.String()),
 	tagIds: t.Optional(t.Array(t.String()))
 })
@@ -81,6 +76,8 @@ export const GetArticlesQueryModel = t.Object({
 	search: t.Optional(t.String()),
 	tags: t.Optional(t.String()), // Comma-separated
 	category: t.Optional(t.String()),
+	statusId: t.Optional(t.String()),
+	langId: t.Optional(t.String()),
 	sortBy: t.Optional(t.Union([t.Literal('createdAt'), t.Literal('views')])),
 	orderBy: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')]))
 })

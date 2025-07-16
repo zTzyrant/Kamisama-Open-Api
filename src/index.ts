@@ -6,6 +6,8 @@ import { auth, OpenAPI } from './libs/auth'
 import { ArticleRoutes } from './modules/articles/index'
 import { TagRoutes } from './modules/tags'
 import { CategoryRoutes } from './modules/categories'
+import { LanguageRoutes } from './modules/languages'
+import { ArticleStatusRoutes } from './modules/article-statuses'
 import { betterAuth } from './modules/auth/macros'
 import { ProfileRoutes } from './modules/profile'
 
@@ -34,7 +36,9 @@ app
 				tags: [
 					{ name: 'App', description: 'General endpoints' },
 					{ name: 'Authentication', description: 'Authentication endpoints' },
-					{ name: 'Payment', description: 'Payment endpoints' }
+					{ name: 'Payment', description: 'Payment endpoints' },
+					{ name: 'Languages', description: 'Endpoints for managing languages' },
+					{ name: 'Article Statuses', description: 'Endpoints for managing article statuses' }
 				],
 				components: await OpenAPI.components,
 				paths: await OpenAPI.getPaths(),
@@ -63,9 +67,12 @@ app
 		}
 	)
 	.group('/api/v1', (app) => app.use(ipaymuVendor))
+	.use(ArticleRoutes)
 	.use(TagRoutes)
 	.use(CategoryRoutes)
 	.use(ProfileRoutes)
+	.use(LanguageRoutes)
+	.use(ArticleStatusRoutes)
 	.listen(process.env.PORT ?? 3000)
 
 console.log(
