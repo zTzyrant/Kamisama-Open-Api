@@ -11,6 +11,7 @@ import { ArticleStatusRoutes } from './modules/article-statuses'
 import { UploadRoutes } from './modules/uploads'
 import { betterAuth } from './modules/auth/macros'
 import { ProfileRoutes } from './modules/profile'
+import { staticPlugin } from '@elysiajs/static'
 
 export const app = new Elysia()
 
@@ -32,14 +33,26 @@ app
 		}
 	})
 	.use(
+		staticPlugin({
+			assets: 'uploads',
+			prefix: '/uploads'
+		})
+	)
+	.use(
 		swagger({
 			documentation: {
 				tags: [
 					{ name: 'App', description: 'General endpoints' },
 					{ name: 'Authentication', description: 'Authentication endpoints' },
 					{ name: 'Payment', description: 'Payment endpoints' },
-					{ name: 'Languages', description: 'Endpoints for managing languages' },
-					{ name: 'Article Statuses', description: 'Endpoints for managing article statuses' }
+					{
+						name: 'Languages',
+						description: 'Endpoints for managing languages'
+					},
+					{
+						name: 'Article Statuses',
+						description: 'Endpoints for managing article statuses'
+					}
 				],
 				components: await OpenAPI.components,
 				paths: await OpenAPI.getPaths(),
