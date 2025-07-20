@@ -1,0 +1,68 @@
+How to use the GET /articles endpoint:
+
+This endpoint allows you to retrieve a list of articles with pagination, filtering, and sorting options.
+
+Endpoint: GET /articles
+
+Query Parameters:
+- page (optional): The page number to retrieve. Default is 1.
+  Example: ?page=2
+- limit (optional): The number of items to retrieve per page. Default is 10.
+  Example: ?limit=20
+- search (optional): A search term to filter articles by title, content, or excerpt.
+  Example: ?search=Technology
+- tags (optional): A comma-separated list of tag IDs to filter articles by.
+  Example: ?tags=tagId1,tagId2
+- category (optional): A category ID to filter articles by.
+  Example: ?category=categoryId1
+- langId (optional): A language ID to filter articles by.
+  Example: ?langId=langId1
+- sortBy (optional): The field to sort the articles by.
+  Example: ?sortBy=createdAt
+- orderBy (optional): The order to sort the articles in (asc or desc).
+  Example: ?orderBy=desc
+
+Example Usage:
+- Get all articles, page 1, limit 10: GET /articles
+- Get articles with "Technology" in title/content, page 2, limit 5: GET /articles?page=2&limit=5&search=Technology
+- Get articles tagged with tagId1 and tagId2, sorted by creation date descending: GET /articles?tags=tagId1,tagId2&sortBy=createdAt&orderBy=desc
+
+How to get IDs for filtering:
+
+- To get Tag IDs: Use the GET /tags endpoint.
+- To get Category IDs: Use the GET /categories endpoint.
+- To get Language IDs: Use the GET /languages endpoint.
+
+---
+
+How to use the GET /articles/my-articles endpoint:
+
+This endpoint allows you to retrieve a list of articles authored by the current authenticated user with pagination, filtering, and sorting options.
+
+Endpoint: GET /articles/my-articles
+Authentication: Required (User must be authenticated)
+
+Query Parameters:
+- page (optional): The page number to retrieve. Default is 1.
+  Example: ?page=2
+- limit (optional): The number of items to retrieve per page. Default is 10.
+  Example: ?limit=20
+- search (optional): A search term to filter articles by title, content, or excerpt.
+  Example: ?search=Technology
+- tags (optional): A comma-separated list of tag IDs to filter articles by.
+  Example: ?tags=tagId1,tagId2
+- category (optional): A category ID to filter articles by.
+  Example: ?category=categoryId1
+- statusId (optional): An article status ID to filter articles by.
+  Example: ?statusId=statusId1
+- langId (optional): A language ID to filter articles by.
+  Example: ?langId=langId1
+- sortBy (optional): The field to sort the articles by.
+  Example: ?sortBy=createdAt
+- orderBy (optional): The order to sort the articles in (asc or desc).
+  Example: ?orderBy=desc
+
+Example Usage:
+- Get all articles by the current user, page 1, limit 10: GET /articles/my-articles
+- Get user's articles with "Technology" in title/content, page 2, limit 5: GET /articles/my-articles?page=2&limit=5&search=Technology
+- Get user's articles tagged with tagId1 and tagId2, sorted by creation date descending: GET /articles/my-articles?tags=tagId1,tagId2&sortBy=createdAt&orderBy=desc

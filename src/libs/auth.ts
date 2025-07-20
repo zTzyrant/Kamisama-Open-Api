@@ -1,7 +1,13 @@
 import { BetterAuthError, User, betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { PrismaClient } from '@prisma/client'
-import { openAPI, username, admin, organization } from 'better-auth/plugins'
+import {
+	openAPI,
+	username,
+	admin,
+	organization,
+	bearer
+} from 'better-auth/plugins'
 import { z } from 'zod'
 
 import {
@@ -70,7 +76,8 @@ export const auth = betterAuth({
 			defaultRole: 'user',
 			adminRoles: ['admin', 'superAdmin', 'kamisama']
 		}),
-		organization()
+		organization(),
+		bearer()
 	],
 	basePath: '/api/auth',
 	baseURL: 'http://localhost:3000',

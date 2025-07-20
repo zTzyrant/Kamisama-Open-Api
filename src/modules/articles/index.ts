@@ -115,10 +115,6 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						description: 'A category ID to filter articles by.',
 						example: 'categoryId1'
 					},
-					statusId: {
-						description: 'An article status ID to filter articles by.',
-						example: 'statusId1'
-					},
 					langId: {
 						description: 'A language ID to filter articles by.',
 						example: 'langId1'

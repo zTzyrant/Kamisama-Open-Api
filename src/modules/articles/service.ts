@@ -2,8 +2,50 @@ import { PrismaClient, Prisma } from '@prisma/client'
 import type { CreateArticleModel, UpdateArticleModel } from './model'
 import { generateSlug } from '../../utils/slug'
 import { sanitizeEditorJsContent } from '../../utils/xss'
+import { getFullUrl } from '../../utils/url'
 
 const prisma = new PrismaClient()
+
+// Helper function to transform article content and cover image
+const transformArticle = (article: any) => {
+	if (!article) {
+		return null
+	}
+
+	// Transform cover image
+	if (article.coverImage) {
+		article.coverImage = getFullUrl(article.coverImage)
+	}
+
+	// Transform images in content
+	if (article.content && typeof article.content === 'string') {
+		try {
+			const content = JSON.parse(article.content)
+			if (content.blocks && Array.isArray(content.blocks)) {
+				content.blocks.forEach((block: any) => {
+					if (
+						block.type === 'image' &&
+						block.data &&
+						block.data.file &&
+						block.data.file.url
+					) {
+						block.data.file.url = getFullUrl(block.data.file.url)
+					}
+				})
+			}
+			article.content = JSON.stringify(content)
+		} catch (error) {
+			// Content is not a valid JSON, do nothing
+		}
+	}
+
+	// also transform author image
+	if (article.author && article.author.image) {
+		article.author.image = getFullUrl(article.author.image)
+	}
+
+	return article
+}
 
 interface GetArticlesOptions {
 	page?: number
@@ -11,7 +53,6 @@ interface GetArticlesOptions {
 	search?: string
 	tags?: string // comma-separated tag IDs
 	category?: string // category ID
-	statusId?: string // Add status filter
 	langId?: string // Add language filter
 	sortBy?: 'createdAt' | 'views'
 	orderBy?: 'asc' | 'desc'
@@ -29,6 +70,17 @@ const getDefaultArticleStatusId = async () => {
 	return defaultStatus.id
 }
 
+const getPublishStatusId = async () => {
+	const status = await prisma.articleStatus.findUnique({
+		where: { slug: 'published' },
+		select: { id: true }
+	})
+	if (!status) {
+		throw new Error('Article status "publish" not found.')
+	}
+	return status.id
+}
+
 const getDefaultLanguageId = async () => {
 	const defaultLang = await prisma.language.findUnique({
 		where: { slug: 'id' },
@@ -40,7 +92,7 @@ const getDefaultLanguageId = async () => {
 	return defaultLang.id
 }
 
-// A single function to get articles with all the filters and options
+// A single function to get published articles with all the filters and options
 export const findArticles = async (options: GetArticlesOptions) => {
 	const {
 		page = 1,
@@ -48,7 +100,6 @@ export const findArticles = async (options: GetArticlesOptions) => {
 		search,
 		tags,
 		category,
-		statusId,
 		langId,
 		sortBy = 'createdAt',
 		orderBy = 'desc',
@@ -57,7 +108,11 @@ export const findArticles = async (options: GetArticlesOptions) => {
 
 	const skip = (page - 1) * limit
 
-	const where: Prisma.ArticleWhereInput = {}
+	const publishStatusId = await getPublishStatusId()
+
+	const where: Prisma.ArticleWhereInput = {
+		statusId: publishStatusId
+	}
 
 	if (authorId) {
 		where.authorId = authorId
@@ -87,10 +142,6 @@ export const findArticles = async (options: GetArticlesOptions) => {
 				}
 			}
 		}
-	}
-
-	if (statusId) {
-		where.statusId = statusId
 	}
 
 	if (langId) {
@@ -138,10 +189,13 @@ export const findArticles = async (options: GetArticlesOptions) => {
 	])
 
 	// Remap articles to include a direct 'views' count
-	const articles = articlesData.map(({ _count, ...article }) => ({
-		...article,
-		views: _count.views
-	}))
+	const articles = articlesData.map(({ _count, ...article }) => {
+		const transformedArticle = transformArticle({
+			...article,
+			views: _count.views
+		})
+		return transformedArticle
+	})
 
 	return { articles, total }
 }
@@ -176,10 +230,10 @@ export const getArticleById = async (id: string) => {
 	if (!articleData) return null
 
 	const { _count, ...article } = articleData
-	return {
+	return transformArticle({
 		...article,
 		views: _count.views
-	}
+	})
 }
 
 export const getArticleBySlug = async (slug: string) => {
@@ -212,10 +266,10 @@ export const getArticleBySlug = async (slug: string) => {
 	if (!articleData) return null
 
 	const { _count, ...article } = articleData
-	return {
+	return transformArticle({
 		...article,
 		views: _count.views
-	}
+	})
 }
 
 export const recordArticleView = async (
@@ -255,23 +309,23 @@ export const createArticle = async (
 	data: CreateArticleModel,
 	authorId: string
 ) => {
-	const finalStatusId = data.statusId || (await getDefaultArticleStatusId());
-	const finalLangId = data.langId || (await getDefaultLanguageId());
+	const finalStatusId = data.statusId || (await getDefaultArticleStatusId())
+	const finalLangId = data.langId || (await getDefaultLanguageId())
 
-	let articleSlug = data.slug;
+	let articleSlug = data.slug
 	if (!articleSlug) {
-		const date = new Date();
-		const year = date.getFullYear();
-		const month = (date.getMonth() + 1).toString().padStart(2, '0');
-		const day = date.getDate().toString().padStart(2, '0');
-		const baseSlug = generateSlug(data.title);
-		let uniqueSlug = `${baseSlug}-${year}-${month}-${day}`;
-		let counter = 0;
+		const date = new Date()
+		const year = date.getFullYear()
+		const month = (date.getMonth() + 1).toString().padStart(2, '0')
+		const day = date.getDate().toString().padStart(2, '0')
+		const baseSlug = generateSlug(data.title)
+		let uniqueSlug = `${baseSlug}-${year}-${month}-${day}`
+		let counter = 0
 		while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
-			counter++;
-			uniqueSlug = `${baseSlug}-${year}-${month}-${day}-${counter}`;
+			counter++
+			uniqueSlug = `${baseSlug}-${year}-${month}-${day}-${counter}`
 		}
-		articleSlug = uniqueSlug;
+		articleSlug = uniqueSlug
 	}
 
 	const articleCreateData: Prisma.ArticleCreateInput = {
@@ -280,32 +334,42 @@ export const createArticle = async (
 		content: sanitizeEditorJsContent(data.content),
 		author: { connect: { id: authorId } },
 		status: { connect: { id: finalStatusId } },
-		lang: { connect: { id: finalLangId } },
-	};
+		lang: { connect: { id: finalLangId } }
+	}
 
 	if (data.excerpt !== null) {
-		articleCreateData.excerpt = data.excerpt;
+		articleCreateData.excerpt = data.excerpt
 	}
 
 	if (data.coverImage !== null) {
-		articleCreateData.coverImage = data.coverImage;
+		articleCreateData.coverImage = data.coverImage
 	}
 
 	if (data.categoryId) {
-		articleCreateData.category = { connect: { id: data.categoryId } };
+		articleCreateData.category = { connect: { id: data.categoryId } }
 	}
 
 	if (data.tagIds && data.tagIds.length > 0) {
-		articleCreateData.tags = { connect: data.tagIds.map(id => ({ id })) };
+		articleCreateData.tags = { connect: data.tagIds.map((id) => ({ id })) }
 	}
 
 	return await prisma.article.create({
 		data: articleCreateData
-	});
+	})
 }
 
 export const updateArticle = async (id: string, data: UpdateArticleModel) => {
-	const { statusId, langId, categoryId, tagIds, excerpt, coverImage, slug, content, ...rest } = data
+	const {
+		statusId,
+		langId,
+		categoryId,
+		tagIds,
+		excerpt,
+		coverImage,
+		slug,
+		content,
+		...rest
+	} = data
 
 	const existingArticle = await prisma.article.findUnique({ where: { id } })
 	if (!existingArticle) {
@@ -330,7 +394,7 @@ export const updateArticle = async (id: string, data: UpdateArticleModel) => {
 	}
 
 	if (content !== undefined) {
-		articleUpdateData.content = sanitizeEditorJsContent(content);
+		articleUpdateData.content = sanitizeEditorJsContent(content)
 	}
 
 	if (excerpt !== undefined) {
@@ -373,4 +437,3 @@ export const deleteArticle = async (id: string) => {
 		}
 	})
 }
-

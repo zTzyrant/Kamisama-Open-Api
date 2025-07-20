@@ -204,7 +204,7 @@ const seedArticles = async (
 			title: 'Boosting Productivity for Developers',
 			slug: 'boosting-productivity-for-developers',
 			content:
-				'Discover tips and tricks to enhance your productivity as a software developer. From tools to techniques, we cover it all.',
+				'{"time":1752590904716,"blocks":[{"id":"jG8inKY-Y9","type":"header","data":{"text":"H1","level":1},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"B9tHogUIiw","type":"header","data":{"text":"H2","level":2},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"2VYHtY60VO","type":"header","data":{"text":"H3","level":3},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"FGtMdExiyd","type":"header","data":{"text":"H4","level":4},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"f8qYRCBMbg","type":"header","data":{"text":"H5","level":5},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"sCukKicuxU","type":"header","data":{"text":"H6 KANAN","level":6},"tunes":{"textAlignment":{"alignment":"right"}}},{"id":"TmoECk2TJk","type":"paragraph","data":{"text":"<b><i><mark class=\\"cdx-marker\\">TEXT fullset with marker</mark></i></b>"},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"tUdgXtJEyE","type":"paragraph","data":{"text":"TEXT LINK TENGAH"},"tunes":{"textAlignment":{"alignment":"center"}}},{"id":"dSh8oMmNkU","type":"paragraph","data":{"text":"LIST GAK KE SORT HEHEHE HAHAHA HIHIHI"},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"WakvrUJum9","type":"list","data":{"style":"ordered","meta":{"counterType":"numeric"},"items":[{"content":"LIST KE ORDER","meta":{},"items":[]},{"content":"2","meta":{},"items":[]},{"content":"3","meta":{},"items":[]},{"content":"4","meta":{},"items":[]}]}},{"id":"HuiMw86Fnu","type":"list","data":{"style":"checklist","meta":{},"items":[{"content":"CHEKIDOT","meta":{"checked":true},"items":[]},{"content":"CHEKINOT","meta":{"checked":false},"items":[]}]}},{"id":"doOZDGpxiw","type":"quote","data":{"text":"QATA QATA QWUOTE","caption":"CAPTION GAK TAU GUNANYA APA","alignment":"left"}},{"id":"4hPt6ABz8q","type":"code","data":{"code":"YA BUAT KODE LAHH HIHIHI"}},{"id":"mo44BZtDqQ","type":"table","data":{"withHeadings":false,"stretched":false,"content":[["TABEL KEREN&nbsp;","GAK PAKE HEADER"]]}},{"id":"kfKyFLdewW","type":"table","data":{"withHeadings":true,"stretched":true,"content":[["PAKE HEADING INI BOS","HEHEHE DAN LEBAR HAHAHA (FULL SIZE)"]]}},{"id":"T6qzRXyG7M","type":"delimiter","data":{}},{"id":"T0PpHoOaf3","type":"warning","data":{"title":"wArNing","message":"hehe"}},{"id":"Zdy2beEIpW","type":"image","data":{"caption":"","withBorder":false,"withBackground":false,"stretched":false,"file":{"url":"http://localhost:8000/uploads/images/image-1752590553.png"}}},{"id":"0_1_bN8J90","type":"paragraph","data":{"text":"image st"},"tunes":{"textAlignment":{"alignment":"left"}}},{"id":"Aw8-ja_tC5","type":"image","data":{"caption":"","withBorder":true,"withBackground":true,"stretched":true,"file":{"url":"http://localhost:8000/uploads/images/image-1752590588.png"}}},{"id":"LRfhD0w0-Q","type":"alert","data":{"type":"primary","align":"left","message":"primer"}},{"id":"OSBGJgU51x","type":"alert","data":{"type":"primary","align":"left","message":"info"}},{"id":"l_KJ0cmbm4","type":"alert","data":{"type":"secondary","align":"left","message":"sec"}},{"id":"ipYNEMyyx0","type":"alert","data":{"type":"success","align":"left","message":"<code class=\\"inline-code\\"><i>sucess code</i></code>"}},{"id":"RjbMm2qBBg","type":"alert","data":{"type":"danger","align":"left","message":"<i><b>danger</b></i>"}},{"id":"jFBoEIY_Zy","type":"alert","data":{"type":"warning","align":"left","message":"<a href=\\"http://www.google.com\\">warn</a>"}},{"id":"KudbqBHmWH","type":"alert","data":{"type":"light","align":"left","message":"putih"}},{"id":"xi18bTpRRg","type":"alert","data":{"type":"dark","align":"left","message":"<b>item</b>"}},{&#34;id&#34;:&#34;YMSldHrCF-&#34;,&#34;type&#34;:&#34;embed&#34;,&#34;data&#34;:{&#34;service&#34;:&#34;youtube&#34;,&#34;source&#34;:&#34;https://www.youtube.com/watch?v=Qe9BEZmSPDA&#34;,&#34;embed&#34;:&#34;https://www.youtube.com/embed/Qe9BEZmSPDA&#34;,&#34;width&#34;:580,&#34;height&#34;:320,&#34;caption&#34;:&#34;you and i&#34;}}],"version":"2.31.0-rc.7"}',
 			excerpt:
 				'Stop wasting time and start coding more efficiently with these productivity hacks.',
 			statusId: articleStatuses.find((s) => s.slug === 'published').id,
@@ -242,9 +242,60 @@ const seedArticles = async (
 	console.log('Seeded articles successfully.')
 }
 
+const seedUsers = async () => {
+	console.log('Seeding additional users...')
+	const usersData = [
+		{
+			name: 'user',
+			email: 'user@example.com',
+			password: 'password',
+			role: 'user',
+			username: 'user'
+		},
+		{
+			name: 'admin',
+			email: 'admin@example.com',
+			password: 'password',
+			role: 'admin',
+			username: 'admin'
+		},
+		{
+			name: 'superAdmin',
+			email: 'superadmin@example.com',
+			password: 'password',
+			role: 'superAdmin',
+			username: 'superadmin'
+		}
+	]
+
+	for (const userData of usersData) {
+		try {
+			const user = await auth.api.createUser({
+				body: {
+					name: userData.name,
+					email: userData.email,
+					password: userData.password,
+					role: userData.role as any,
+					data: {
+						username: userData.username
+					}
+				}
+			})
+			console.log('Successfully created user:', user.user.name)
+		} catch (error: any) {
+			if (error.code === 'P2002') {
+				console.log(`User with email ${userData.email} already exists.`)
+			} else {
+				console.error('Error creating user:', error)
+			}
+		}
+	}
+}
+
 async function main() {
 	await cleanDb()
 	const kamisama = await seedKamisama()
+	await seedUsers()
 	const categories = await seedCategories()
 	const tags = await seedTags()
 	const articleStatuses = await seedArticleStatuses()
