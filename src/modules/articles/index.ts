@@ -9,6 +9,7 @@ import {
 	getArticleBySlug,
 	recordArticleView
 } from './service'
+import { getArticlePermissions } from './permissions'
 import {
 	CreateArticleModel,
 	UpdateArticleModel,
@@ -184,7 +185,7 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						example: 10
 					},
 					search: {
-							description:
+						description:
 							'A search term to filter articles by title, content, or excerpt.',
 						example: 'Technology'
 					},
@@ -220,7 +221,7 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	// GET article by ID
 	.get(
 		'/:id',
-		async ({ params: { id }, status }) => {
+		async ({ params: { id }, user, status }) => {
 			const article = await getArticleById(id)
 			if (!article) {
 				return status(404, {
@@ -228,13 +229,30 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 					message: 'Article not found'
 				})
 			}
+
+			const role = user.role
+			const permissions = getArticlePermissions(
+				{
+					id: user.id,
+					role:
+						role === 'admin' ||
+						role === 'superAdmin' ||
+						role === 'kamisama' ||
+						role === 'user'
+							? role
+							: 'user'
+				},
+				article
+			)
+
 			return status(200, {
 				status: 200,
 				message: 'Article retrieved successfully',
-				data: article
+				data: { ...article, permissions }
 			})
 		},
 		{
+			auth: true,
 			detail: {
 				tags: ['Articles'],
 				description: 'Get an article by its ID',
@@ -242,7 +260,7 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			}
 		}
 	)
-	
+
 	// GET articles by status slug
 	.get(
 		'/status/:statusSlug',
@@ -297,7 +315,8 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 				params: {
 					statusSlug: {
 						type: 'string',
-						description: 'The slug of the article status to retrieve (e.g., draft, published, archived)',
+						description:
+							'The slug of the article status to retrieve (e.g., draft, published, archived)',
 						example: 'published'
 					}
 				},
@@ -311,12 +330,12 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						example: 10
 					},
 					search: {
-							description:
+						description:
 							'A search term to filter articles by title, content, or excerpt.',
 						example: 'Technology'
 					},
 					tags: {
-							description:
+						description:
 							'A comma-separated list of tag IDs to filter articles by.',
 						example: 'tagId1,tagId2'
 					},
@@ -412,12 +431,12 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						example: 10
 					},
 					search: {
-							description:
+						description:
 							'A search term to filter articles by title, content, or excerpt.',
 						example: 'Technology'
 					},
 					tags: {
-							description:
+						description:
 							'A comma-separated list of tag IDs to filter articles by.',
 						example: 'tagId1,tagId2'
 					},
