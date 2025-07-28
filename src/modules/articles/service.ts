@@ -1,439 +1,374 @@
 import { PrismaClient, Prisma } from '@prisma/client'
-import type { CreateArticleModel, UpdateArticleModel } from './model'
+import { ArticleModel } from './model' // Mengimpor namespace utama dari model
 import { generateSlug } from '../../utils/slug'
 import { sanitizeEditorJsContent } from '../../utils/xss'
 import { getFullUrl } from '../../utils/url'
 
 const prisma = new PrismaClient()
 
-// Helper function to transform article content and cover image
-const transformArticle = (article: any) => {
-	if (!article) {
-		return null
+/**
+ * Service untuk menangani semua logika bisnis yang terkait dengan artikel.
+ * Dibuat sebagai 'abstract class' dengan metode 'static' karena tidak perlu menyimpan state internal.
+ * Ini mencegah instansiasi kelas yang tidak perlu dan mengikuti best practice.
+ */
+export abstract class ArticleService {
+	// --- METODE HELPER INTERNAL (PRIVATE) ---
+
+	/**
+	 * Mengubah path relatif gambar menjadi URL lengkap.
+	 * @private
+	 */
+	private static transformArticle(article: any): ArticleModel.Data | null {
+		if (!article) {
+			return null
+		}
+
+		// Transformasi coverImage
+		if (article.coverImage) {
+			article.coverImage = getFullUrl(article.coverImage)
+		}
+
+		// Transformasi gambar di dalam konten Editor.js
+		if (article.content && typeof article.content === 'string') {
+			try {
+				const content = JSON.parse(article.content)
+				if (content.blocks && Array.isArray(content.blocks)) {
+					content.blocks.forEach((block: any) => {
+						if (block.type === 'image' && block.data?.file?.url) {
+							block.data.file.url = getFullUrl(block.data.file.url)
+						}
+					})
+				}
+				article.content = JSON.stringify(content)
+			} catch (error) {
+				// Biarkan jika konten bukan JSON valid
+			}
+		}
+
+		// Transformasi gambar author
+		if (article.author?.image) {
+			article.author.image = getFullUrl(article.author.image)
+		}
+
+		// Memastikan tipe data output sesuai dengan ArticleModel.Data
+		const { _count, ...rest } = article
+		return {
+			...rest,
+			views: _count?.views ?? article.views ?? 0,
+			category: article.category || null,
+			publishedAt: article.publishedAt || null
+		} as ArticleModel.Data
 	}
 
-	// Transform cover image
-	if (article.coverImage) {
-		article.coverImage = getFullUrl(article.coverImage)
+	private static async getPublishStatusId(): Promise<string> {
+		const status = await prisma.articleStatus.findUnique({
+			where: { slug: 'published' },
+			select: { id: true }
+		})
+		if (!status) throw new Error('Article status "published" not found.')
+		return status.id
 	}
 
-	// Transform images in content
-	if (article.content && typeof article.content === 'string') {
-		try {
-			const content = JSON.parse(article.content)
-			if (content.blocks && Array.isArray(content.blocks)) {
-				content.blocks.forEach((block: any) => {
-					if (
-						block.type === 'image' &&
-						block.data &&
-						block.data.file &&
-						block.data.file.url
-					) {
-						block.data.file.url = getFullUrl(block.data.file.url)
+	private static async getDefaultArticleStatusId(): Promise<string> {
+		const status = await prisma.articleStatus.findUnique({
+			where: { slug: 'draft' },
+			select: { id: true }
+		})
+		if (!status) throw new Error('Default article status "draft" not found.')
+		return status.id
+	}
+
+	private static async getDefaultLanguageId(): Promise<string> {
+		const lang = await prisma.language.findUnique({
+			where: { slug: 'id' },
+			select: { id: true }
+		})
+		if (!lang) throw new Error('Default language "id" not found.')
+		return lang.id
+	}
+
+	// --- METODE PUBLIK SERVICE ---
+
+	/**
+	 * Menemukan artikel dengan filter, paginasi, dan pengurutan.
+	 */
+	static async findArticles(
+		options: ArticleModel.Query & { authorId?: string; statusId?: string }
+	) {
+		const {
+			page = 1,
+			limit = 10,
+			search,
+			tags,
+			category,
+			langId,
+			statusId,
+			sortBy,
+			orderBy,
+			authorId
+		} = options
+		const skip = (page - 1) * limit
+
+		const where: Prisma.ArticleWhereInput = {
+			statusId: statusId || (await this.getPublishStatusId())
+		}
+
+		if (authorId) where.authorId = authorId
+		if (search) {
+			where.OR = [
+				{ title: { contains: search, mode: 'insensitive' } },
+				{ content: { contains: search, mode: 'insensitive' } },
+				{ excerpt: { contains: search, mode: 'insensitive' } }
+			]
+		}
+		if (category) where.categoryId = category
+		if (tags) {
+			where.tags = {
+				some: {
+					id: {
+						in: tags
+							.split(',')
+							.map((t) => t.trim())
+							.filter(Boolean)
 					}
-				})
-			}
-			article.content = JSON.stringify(content)
-		} catch (error) {
-			// Content is not a valid JSON, do nothing
-		}
-	}
-
-	// also transform author image
-	if (article.author && article.author.image) {
-		article.author.image = getFullUrl(article.author.image)
-	}
-
-	return article
-}
-
-interface GetArticlesOptions {
-	page?: number
-	limit?: number
-	search?: string
-	tags?: string // comma-separated tag IDs
-	category?: string // category ID
-	langId?: string // Add language filter
-	sortBy?: 'createdAt' | 'views'
-	orderBy?: 'asc' | 'desc'
-	authorId?: string
-}
-
-const getDefaultArticleStatusId = async () => {
-	const defaultStatus = await prisma.articleStatus.findUnique({
-		where: { slug: 'draft' },
-		select: { id: true }
-	})
-	if (!defaultStatus) {
-		throw new Error('Default article status (draft) not found.')
-	}
-	return defaultStatus.id
-}
-
-const getPublishStatusId = async () => {
-	const status = await prisma.articleStatus.findUnique({
-		where: { slug: 'published' },
-		select: { id: true }
-	})
-	if (!status) {
-		throw new Error('Article status "publish" not found.')
-	}
-	return status.id
-}
-
-const getDefaultLanguageId = async () => {
-	const defaultLang = await prisma.language.findUnique({
-		where: { slug: 'id' },
-		select: { id: true }
-	})
-	if (!defaultLang) {
-		throw new Error('Default language (id) not found.')
-	}
-	return defaultLang.id
-}
-
-// A single function to get published articles with all the filters and options
-export const findArticles = async (options: GetArticlesOptions) => {
-	const {
-		page = 1,
-		limit = 10,
-		search,
-		tags,
-		category,
-		langId,
-		sortBy = 'createdAt',
-		orderBy = 'desc',
-		authorId
-	} = options
-
-	const skip = (page - 1) * limit
-
-	const publishStatusId = await getPublishStatusId()
-
-	const where: Prisma.ArticleWhereInput = {
-		statusId: publishStatusId
-	}
-
-	if (authorId) {
-		where.authorId = authorId
-	}
-
-	if (search) {
-		where.OR = [
-			{ title: { contains: search, mode: 'insensitive' } },
-			{ content: { contains: search, mode: 'insensitive' } },
-			{ excerpt: { contains: search, mode: 'insensitive' } }
-		]
-	}
-
-	if (category) {
-		where.categoryId = category
-	}
-
-	if (tags) {
-		// Assuming tags are provided as a comma-separated string of tag IDs
-		where.tags = {
-			some: {
-				id: {
-					in: tags
-						.split(',')
-						.map((tag) => tag.trim())
-						.filter(Boolean)
 				}
 			}
 		}
+		if (langId) where.langId = langId
+
+		const orderByClause: Prisma.ArticleOrderByWithRelationInput =
+			sortBy === 'views'
+				? { views: { _count: orderBy } }
+				: { createdAt: orderBy }
+
+		const [articlesData, total] = await prisma.$transaction([
+			prisma.article.findMany({
+				where,
+				skip,
+				take: limit,
+				orderBy: orderByClause,
+				include: {
+					author: { select: { id: true, name: true, image: true } },
+					category: true,
+					tags: true,
+					status: true,
+					lang: true,
+					_count: { select: { views: true } }
+				}
+			}),
+			prisma.article.count({ where })
+		])
+
+		const articles = articlesData.map(
+			(article) => this.transformArticle(article) as ArticleModel.Data
+		)
+
+		return { articles, total }
 	}
 
-	if (langId) {
-		where.langId = langId
-	}
-
-	const orderByClause: Prisma.ArticleOrderByWithRelationInput = {}
-
-	if (sortBy === 'views') {
-		orderByClause.views = {
-			_count: orderBy
-		}
-	} else {
-		orderByClause.createdAt = orderBy
-	}
-
-	const [articlesData, total] = await prisma.$transaction([
-		prisma.article.findMany({
-			where,
-			skip,
-			take: limit,
-			orderBy: orderByClause,
+	/**
+	 * Mendapatkan artikel berdasarkan ID. Melempar Error jika tidak ditemukan.
+	 */
+	static async getArticleById(id: string): Promise<ArticleModel.Data> {
+		const articleData = await prisma.article.findUnique({
+			where: { id },
 			include: {
-				author: {
-					select: { id: true, name: true, image: true }
-				},
-				category: {
-					select: { id: true, name: true, slug: true }
-				},
-				tags: {
-					select: { id: true, name: true, slug: true }
-				},
-				status: {
-					select: { id: true, name: true, slug: true }
-				},
-				lang: {
-					select: { id: true, name: true, slug: true }
-				},
-				_count: {
-					select: { views: true }
+				author: { select: { id: true, name: true, image: true } },
+				category: true,
+				tags: true,
+				status: true,
+				lang: true,
+				_count: { select: { views: true } }
+			}
+		})
+
+		if (!articleData) {
+			throw new Error('Article not found')
+		}
+
+		return this.transformArticle(articleData) as ArticleModel.Data
+	}
+
+	/**
+	 * Mendapatkan artikel berdasarkan slug. Melempar Error jika tidak ditemukan.
+	 */
+	static async getArticleBySlug(slug: string): Promise<ArticleModel.Data> {
+		const articleData = await prisma.article.findUnique({
+			where: { slug },
+			include: {
+				author: { select: { id: true, name: true, image: true } },
+				category: true,
+				tags: true,
+				status: true,
+				lang: true,
+				_count: { select: { views: true } }
+			}
+		})
+
+		if (!articleData) {
+			throw new Error('Article not found')
+		}
+
+		return this.transformArticle(articleData) as ArticleModel.Data
+	}
+
+	/**
+	 * Merekam jejak view artikel.
+	 */
+	static async recordArticleView(
+		articleId: string,
+		viewerIp: string,
+		userAgent?: string,
+		referer?: string,
+		userId?: string
+	): Promise<void> {
+		const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+		const existingView = await prisma.articleView.findFirst({
+			where: { articleId, viewerIp, viewedAt: { gte: sevenDaysAgo } }
+		})
+
+		if (!existingView) {
+			await prisma.articleView.create({
+				data: {
+					articleId,
+					viewerIp,
+					userAgent: userAgent || null,
+					referer: referer || null,
+					userId: userId || null
 				}
-			}
-		}),
-		prisma.article.count({ where })
-	])
-
-	// Remap articles to include a direct 'views' count
-	const articles = articlesData.map(({ _count, ...article }) => {
-		const transformedArticle = transformArticle({
-			...article,
-			views: _count.views
-		})
-		return transformedArticle
-	})
-
-	return { articles, total }
-}
-
-export const getArticleById = async (id: string) => {
-	const articleData = await prisma.article.findUnique({
-		where: {
-			id
-		},
-		include: {
-			author: {
-				select: { id: true, name: true, image: true }
-			},
-			category: {
-				select: { id: true, name: true, slug: true }
-			},
-			tags: {
-				select: { id: true, name: true, slug: true }
-			},
-			status: {
-				select: { id: true, name: true, slug: true }
-			},
-			lang: {
-				select: { id: true, name: true, slug: true }
-			},
-			_count: {
-				select: { views: true }
-			}
+			})
 		}
-	})
+	}
 
-	if (!articleData) return null
+	/**
+	 * Membuat artikel baru.
+	 */
+	static async createArticle(
+		data: ArticleModel.Create,
+		authorId: string
+	): Promise<ArticleModel.Data> {
+		const finalStatusId =
+			data.statusId || (await this.getDefaultArticleStatusId())
+		const finalLangId = data.langId || (await this.getDefaultLanguageId())
 
-	const { _count, ...article } = articleData
-	return transformArticle({
-		...article,
-		views: _count.views
-	})
-}
-
-export const getArticleBySlug = async (slug: string) => {
-	const articleData = await prisma.article.findUnique({
-		where: {
-			slug
-		},
-		include: {
-			author: {
-				select: { id: true, name: true, image: true }
-			},
-			category: {
-				select: { id: true, name: true, slug: true }
-			},
-			tags: {
-				select: { id: true, name: true, slug: true }
-			},
-			status: {
-				select: { id: true, name: true, slug: true }
-			},
-			lang: {
-				select: { id: true, name: true, slug: true }
-			},
-			_count: {
-				select: { views: true }
+		let articleSlug = data.slug
+		if (!articleSlug) {
+			const date = new Date()
+			const baseSlug = generateSlug(data.title)
+			let uniqueSlug = `${baseSlug}-${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+			let counter = 0
+			while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
+				counter++
+				uniqueSlug = `${baseSlug}-${counter}`
 			}
+			articleSlug = uniqueSlug
 		}
-	})
 
-	if (!articleData) return null
-
-	const { _count, ...article } = articleData
-	return transformArticle({
-		...article,
-		views: _count.views
-	})
-}
-
-export const recordArticleView = async (
-	articleId: string,
-	viewerIp: string,
-	userAgent?: string,
-	referer?: string,
-	userId?: string
-) => {
-	const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-
-	const existingView = await prisma.articleView.findFirst({
-		where: {
-			articleId: articleId,
-			viewerIp: viewerIp,
-			viewedAt: {
-				gte: sevenDaysAgo
-			}
+		const articleCreateData: Prisma.ArticleCreateInput = {
+			title: data.title,
+			slug: articleSlug,
+			content: sanitizeEditorJsContent(data.content),
+			author: { connect: { id: authorId } },
+			status: { connect: { id: finalStatusId } },
+			lang: { connect: { id: finalLangId } },
+			...(data.excerpt && { excerpt: data.excerpt }),
+			...(data.coverImage && { coverImage: data.coverImage }),
+			...(data.categoryId && {
+				category: { connect: { id: data.categoryId } }
+			}),
+			...(data.tagIds &&
+				data.tagIds.length > 0 && {
+					tags: { connect: data.tagIds.map((id) => ({ id })) }
+				})
 		}
-	})
 
-	if (!existingView) {
-		await prisma.articleView.create({
-			data: {
-				articleId: articleId,
-				viewerIp: viewerIp,
-				userAgent: userAgent || null,
-				referer: referer || null,
-				userId: userId || null,
-				viewedAt: new Date()
+		const newArticle = await prisma.article.create({
+			data: articleCreateData,
+			include: {
+				author: { select: { id: true, name: true, image: true } },
+				category: true,
+				tags: true,
+				status: true,
+				lang: true,
+				_count: { select: { views: true } }
 			}
 		})
+
+		return this.transformArticle(newArticle) as ArticleModel.Data
 	}
-}
 
-export const createArticle = async (
-	data: CreateArticleModel,
-	authorId: string
-) => {
-	const finalStatusId = data.statusId || (await getDefaultArticleStatusId())
-	const finalLangId = data.langId || (await getDefaultLanguageId())
+	/**
+	 * Memperbarui artikel. Melempar Error jika tidak ditemukan.
+	 */
+	static async updateArticle(
+		id: string,
+		data: ArticleModel.Update
+	): Promise<ArticleModel.Data> {
+		const {
+			statusId,
+			langId,
+			categoryId,
+			tagIds,
+			excerpt,
+			coverImage,
+			slug,
+			content,
+			...rest
+		} = data
 
-	let articleSlug = data.slug
-	if (!articleSlug) {
-		const date = new Date()
-		const year = date.getFullYear()
-		const month = (date.getMonth() + 1).toString().padStart(2, '0')
-		const day = date.getDate().toString().padStart(2, '0')
-		const baseSlug = generateSlug(data.title)
-		let uniqueSlug = `${baseSlug}-${year}-${month}-${day}`
-		let counter = 0
-		while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
-			counter++
-			uniqueSlug = `${baseSlug}-${year}-${month}-${day}-${counter}`
+		const existingArticle = await prisma.article.findUnique({ where: { id } })
+		if (!existingArticle) {
+			throw new Error('Article not found')
 		}
-		articleSlug = uniqueSlug
+
+		const articleUpdateData: Prisma.ArticleUpdateInput = { ...rest }
+
+		if (content !== undefined)
+			articleUpdateData.content = sanitizeEditorJsContent(content)
+		if (excerpt !== undefined) articleUpdateData.excerpt = excerpt
+		if (coverImage !== undefined) articleUpdateData.coverImage = coverImage
+		if (statusId !== undefined)
+			articleUpdateData.status = { connect: { id: statusId } }
+		if (langId !== undefined)
+			articleUpdateData.lang = { connect: { id: langId } }
+		if (categoryId !== undefined)
+			articleUpdateData.category = categoryId
+				? { connect: { id: categoryId } }
+				: { disconnect: true }
+		if (tagIds !== undefined)
+			articleUpdateData.tags = { set: tagIds.map((id) => ({ id })) }
+
+		const updatedArticle = await prisma.article.update({
+			where: { id },
+			data: articleUpdateData,
+			include: {
+				author: { select: { id: true, name: true, image: true } },
+				category: true,
+				tags: true,
+				status: true,
+				lang: true,
+				_count: { select: { views: true } }
+			}
+		})
+
+		return this.transformArticle(updatedArticle) as ArticleModel.Data
 	}
 
-	const articleCreateData: Prisma.ArticleCreateInput = {
-		title: data.title,
-		slug: articleSlug,
-		content: sanitizeEditorJsContent(data.content),
-		author: { connect: { id: authorId } },
-		status: { connect: { id: finalStatusId } },
-		lang: { connect: { id: finalLangId } }
-	}
-
-	if (data.excerpt !== null) {
-		articleCreateData.excerpt = data.excerpt
-	}
-
-	if (data.coverImage !== null) {
-		articleCreateData.coverImage = data.coverImage
-	}
-
-	if (data.categoryId) {
-		articleCreateData.category = { connect: { id: data.categoryId } }
-	}
-
-	if (data.tagIds && data.tagIds.length > 0) {
-		articleCreateData.tags = { connect: data.tagIds.map((id) => ({ id })) }
-	}
-
-	return await prisma.article.create({
-		data: articleCreateData
-	})
-}
-
-export const updateArticle = async (id: string, data: UpdateArticleModel) => {
-	const {
-		statusId,
-		langId,
-		categoryId,
-		tagIds,
-		excerpt,
-		coverImage,
-		slug,
-		content,
-		...rest
-	} = data
-
-	const existingArticle = await prisma.article.findUnique({ where: { id } })
-	if (!existingArticle) {
-		return null // Or throw an error, depending on desired behavior
-	}
-
-	const articleUpdateData: Prisma.ArticleUpdateInput = { ...rest }
-
-	if (slug !== undefined && slug !== existingArticle.slug) {
-		let newSlug = generateSlug(slug)
-		let counter = 0
-		while (await prisma.article.findUnique({ where: { slug: newSlug } })) {
-			counter++
-			newSlug = `${generateSlug(slug)}-${counter}`
+	/**
+	 * Menghapus artikel. Melempar Error jika tidak ditemukan.
+	 */
+	static async deleteArticle(id: string): Promise<void> {
+		try {
+			await prisma.article.delete({ where: { id } })
+		} catch (error: any) {
+			if (
+				error instanceof Prisma.PrismaClientKnownRequestError &&
+				error.code === 'P2025'
+			) {
+				// P2025 adalah kode error Prisma untuk "Record to delete does not exist."
+				throw new Error('Article not found')
+			}
+			throw error // Lemparkan kembali error lain yang tidak terduga
 		}
-		articleUpdateData.slug = newSlug
-	} else if (slug === null) {
-		// If slug is explicitly set to null, it means user wants to clear it.
-		// However, slug is a required field in Prisma, so we should prevent this or handle it.
-		// For now, let's throw an error or ignore the update for slug.
-		throw new Error('Slug cannot be set to null.')
 	}
-
-	if (content !== undefined) {
-		articleUpdateData.content = sanitizeEditorJsContent(content)
-	}
-
-	if (excerpt !== undefined) {
-		articleUpdateData.excerpt = excerpt
-	}
-	if (coverImage !== undefined) {
-		articleUpdateData.coverImage = coverImage
-	}
-
-	if (statusId !== undefined) {
-		articleUpdateData.status = { connect: { id: statusId } }
-	}
-
-	if (langId !== undefined) {
-		articleUpdateData.lang = { connect: { id: langId } }
-	}
-
-	if (categoryId !== undefined) {
-		articleUpdateData.category = categoryId
-			? { connect: { id: categoryId } }
-			: { disconnect: true }
-	}
-
-	if (tagIds !== undefined) {
-		articleUpdateData.tags = { set: tagIds.map((id) => ({ id })) }
-	}
-
-	return await prisma.article.update({
-		where: {
-			id
-		},
-		data: articleUpdateData
-	})
-}
-
-export const deleteArticle = async (id: string) => {
-	return await prisma.article.delete({
-		where: {
-			id
-		}
-	})
 }
