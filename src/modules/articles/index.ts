@@ -1,21 +1,8 @@
-import { Elysia, status as stat } from 'elysia'
+import { Elysia } from 'elysia'
 import type { BetterAuthUser, BetterAuthSession } from '../auth/types'
-import {
-	findArticles,
-	getArticleById,
-	createArticle,
-	updateArticle,
-	deleteArticle,
-	getArticleBySlug,
-	recordArticleView
-} from './service'
+import { ArticleService } from './service'
 import { getArticlePermissions } from './permissions'
-import {
-	CreateArticleModel,
-	UpdateArticleModel,
-	GetArticlesQueryModel
-} from './model'
-
+import { ArticleModel, SharedModel } from './model'
 import { getArticleStatusBySlug } from '../article-statuses/service'
 import { getLanguageBySlug } from '../languages/service'
 
@@ -57,78 +44,50 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.get(
 		'/',
 		async ({ query, request, status }) => {
-			const { page = 1, limit = 10, ...filters } = query
-			const { articles, total } = await findArticles({
-				page,
-				limit,
-				...filters
-			})
+			try {
+				const { page = 1, limit = 10, ...filters } = query
+				const { articles, total } = await ArticleService.findArticles({
+					page,
+					limit,
+					...filters
+				})
 
-			const baseUrl = `${request.url.split('?')[0]}`
-			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
-				baseUrl,
-				page,
-				limit,
-				total,
-				query
-			)
+				const baseUrl = `${request.url.split('?')[0]}`
+				const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
+					baseUrl,
+					page,
+					limit,
+					total,
+					query
+				)
 
-			return status(200, {
-				status: 200,
-				message: 'Articles retrieved successfully',
-				data: articles,
-				pagination: {
-					currentPage: page,
-					totalPages,
-					totalItems: total,
-					perPage: limit,
-					nextPageUrl,
-					prevPageUrl
-				}
-			})
+				return status(200, {
+					status: 'success',
+					message: 'Articles retrieved successfully',
+					data: articles,
+					pagination: {
+						currentPage: page,
+						totalPages,
+						totalItems: total,
+						perPage: limit,
+						nextPageUrl,
+						prevPageUrl
+					}
+				})
+			} catch (error: any) {
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve articles',
+					statusCode: '500'
+				})
+			}
 		},
 		{
-			query: GetArticlesQueryModel,
+			query: ArticleModel.query,
 			detail: {
 				tags: ['Articles'],
 				description: 'Get all articles with pagination, filtering, and sorting',
-				summary: 'Get all articles',
-				query: {
-					page: {
-						description: 'The page number to retrieve.',
-						example: 1
-					},
-					limit: {
-						description: 'The number of items to retrieve per page.',
-						example: 10
-					},
-					search: {
-						description:
-							'A search term to filter articles by title, content, or excerpt.',
-						example: 'Technology'
-					},
-					tags: {
-						description:
-							'A comma-separated list of tag IDs to filter articles by.',
-						example: 'tagId1,tagId2'
-					},
-					category: {
-						description: 'A category ID to filter articles by.',
-						example: 'categoryId1'
-					},
-					langId: {
-						description: 'A language ID to filter articles by.',
-						example: 'langId1'
-					},
-					sortBy: {
-						description: 'The field to sort the articles by.',
-						example: 'createdAt'
-					},
-					orderBy: {
-						description: 'The order to sort the articles in.',
-						example: 'desc'
-					}
-				}
+				summary: 'Get all articles'
 			}
 		}
 	)
@@ -136,85 +95,55 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.get(
 		'/my-articles',
 		async ({ user, query, request, status }) => {
-			const { page = 1, limit = 10, ...filters } = query
-			const { articles, total } = await findArticles({
-				authorId: user.id,
-				page,
-				limit,
-				...filters
-			})
+			try {
+				const { page = 1, limit = 10, ...filters } = query
+				console.log(`user: ${user.id}`)
+				const { articles, total } = await ArticleService.findArticles({
+					authorId: user.id,
+					page,
+					limit,
+					...filters
+				})
+				console.log(articles, total)
 
-			const baseUrl = `${request.url.split('?')[0]}`
-			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
-				baseUrl,
-				page,
-				limit,
-				total,
-				query
-			)
+				const baseUrl = `${request.url.split('?')[0]}`
+				const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
+					baseUrl,
+					page,
+					limit,
+					total,
+					query
+				)
 
-			return status(200, {
-				status: 200,
-				message: 'Your articles retrieved successfully',
-				data: articles,
-				pagination: {
-					currentPage: page,
-					totalPages,
-					totalItems: total,
-					perPage: limit,
-					nextPageUrl,
-					prevPageUrl
-				}
-			})
+				return status(200, {
+					status: 'success',
+					message: 'Your articles retrieved successfully',
+					data: articles,
+					pagination: {
+						currentPage: page,
+						totalPages,
+						totalItems: total,
+						perPage: limit,
+						nextPageUrl,
+						prevPageUrl
+					}
+				})
+			} catch (error: any) {
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve your articles',
+					statusCode: '500'
+				})
+			}
 		},
 		{
-			auth: true,
-			query: GetArticlesQueryModel,
+			auth: true, // Requires authentication
+			query: ArticleModel.query,
 			detail: {
 				tags: ['Articles'],
 				description:
 					'Get all articles authored by the current user with pagination, filtering, and sorting',
-				summary: 'Get my articles',
-				query: {
-					page: {
-						description: 'The page number to retrieve.',
-						example: 1
-					},
-					limit: {
-						description: 'The number of items to retrieve per page.',
-						example: 10
-					},
-					search: {
-						description:
-							'A search term to filter articles by title, content, or excerpt.',
-						example: 'Technology'
-					},
-					tags: {
-						description:
-							'A comma-separated list of tag IDs to filter articles by.',
-						example: 'tagId1,tagId2'
-					},
-					category: {
-						description: 'A category ID to filter articles by.',
-						example: 'categoryId1'
-					},
-					statusId: {
-						description: 'An article status ID to filter articles by.',
-						example: 'statusId1'
-					},
-					langId: {
-						description: 'A language ID to filter articles by.',
-						example: 'langId1'
-					},
-					sortBy: {
-						description: 'The field to sort the articles by.',
-						example: 'createdAt'
-					},
-					orderBy: {
-						description: 'The order to sort the articles in.',
-						example: 'desc'
-					}
-				}
+				summary: 'Get my articles'
 			}
 		}
 	)
@@ -222,37 +151,42 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.get(
 		'/:id',
 		async ({ params: { id }, user, status }) => {
-			const article = await getArticleById(id)
-			if (!article) {
-				return status(404, {
-					status: 404,
-					message: 'Article not found'
+			try {
+				const article = await ArticleService.getArticleById(id)
+
+				const role = user?.role || 'user'
+				const permissions = getArticlePermissions(
+					{
+						id: user?.id || '',
+						role: ['admin', 'superAdmin', 'kamisama', 'user'].includes(role)
+							? (role as 'admin' | 'superAdmin' | 'kamisama' | 'user')
+							: 'user'
+					},
+					article as any
+				)
+
+				return status(200, {
+					status: 'success',
+					message: 'Article retrieved successfully',
+					data: { ...article, permissions }
+				})
+			} catch (error: any) {
+				if (error.message === 'Article not found') {
+					return status(404, {
+						status: 'error',
+						message: 'Article not found',
+						statusCode: '404'
+					})
+				}
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve article',
+					statusCode: '500'
 				})
 			}
-
-			const role = user.role
-			const permissions = getArticlePermissions(
-				{
-					id: user.id,
-					role:
-						role === 'admin' ||
-						role === 'superAdmin' ||
-						role === 'kamisama' ||
-						role === 'user'
-							? role
-							: 'user'
-				},
-				article
-			)
-
-			return status(200, {
-				status: 200,
-				message: 'Article retrieved successfully',
-				data: { ...article, permissions }
-			})
 		},
 		{
-			auth: true,
+			auth: true, // Requires authentication
 			detail: {
 				tags: ['Articles'],
 				description: 'Get an article by its ID',
@@ -260,106 +194,66 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			}
 		}
 	)
-
 	// GET articles by status slug
 	.get(
 		'/status/:statusSlug',
 		async ({ params: { statusSlug }, query, request, status }) => {
-			const { page = 1, limit = 10, ...filters } = query
+			try {
+				const { page = 1, limit = 10, ...filters } = query
 
-			const articleStatus = await getArticleStatusBySlug(statusSlug)
-			if (!articleStatus) {
-				return status(400, {
-					status: 400,
-					message: 'Invalid article status slug'
+				const articleStatus = await getArticleStatusBySlug(statusSlug)
+				if (!articleStatus) {
+					return status(400, {
+						status: 'error',
+						message: 'Invalid article status slug',
+						statusCode: '400'
+					})
+				}
+
+				const { articles, total } = await ArticleService.findArticles({
+					page,
+					limit,
+					statusId: articleStatus.id,
+					...filters
+				})
+
+				const baseUrl = `${request.url.split('?')[0]}`
+				const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
+					baseUrl,
+					page,
+					limit,
+					total,
+					query
+				)
+
+				return status(200, {
+					status: 'success',
+					message: `Articles with status ${articleStatus.name} retrieved successfully`,
+					data: articles,
+					pagination: {
+						currentPage: page,
+						totalPages,
+						totalItems: total,
+						perPage: limit,
+						nextPageUrl,
+						prevPageUrl
+					}
+				})
+			} catch (error: any) {
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve articles by status',
+					statusCode: '500'
 				})
 			}
-
-			const { articles, total } = await findArticles({
-				page,
-				limit,
-				statusId: articleStatus.id,
-				...filters
-			})
-
-			const baseUrl = `${request.url.split('?')[0]}`
-			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
-				baseUrl,
-				page,
-				limit,
-				total,
-				query
-			)
-
-			return status(200, {
-				status: 200,
-				message: `Articles with status ${articleStatus.name} retrieved successfully`,
-				data: articles,
-				pagenation: {
-					currentPage: page,
-					totalPages,
-					totalItems: total,
-					perPage: limit,
-					nextPageUrl,
-					prevPageUrl
-				}
-			})
 		},
 		{
-			query: GetArticlesQueryModel,
+			query: ArticleModel.query,
 			detail: {
 				tags: ['Articles'],
 				description:
 					'Get articles by status slug with pagination, filtering, and sorting',
-				summary: 'Get articles by status slug',
-				params: {
-					statusSlug: {
-						type: 'string',
-						description:
-							'The slug of the article status to retrieve (e.g., draft, published, archived)',
-						example: 'published'
-					}
-				},
-				query: {
-					page: {
-						description: 'The page number to retrieve.',
-						example: 1
-					},
-					limit: {
-						description: 'The number of items to retrieve per page.',
-						example: 10
-					},
-					search: {
-						description:
-							'A search term to filter articles by title, content, or excerpt.',
-						example: 'Technology'
-					},
-					tags: {
-						description:
-							'A comma-separated list of tag IDs to filter articles by.',
-						example: 'tagId1,tagId2'
-					},
-					category: {
-						description: 'A category ID to filter articles by.',
-						example: 'categoryId1'
-					},
-					statusId: {
-						description: 'An article status ID to filter articles by.',
-						example: 'statusId1'
-					},
-					langId: {
-						description: 'A language ID to filter articles by.',
-						example: 'langId1'
-					},
-					sortBy: {
-						description: 'The field to sort the articles by.',
-						example: 'createdAt'
-					},
-					orderBy: {
-						description: 'The order to sort the articles in.',
-						example: 'desc'
-					}
-				}
+				summary: 'Get articles by status slug'
 			}
 		}
 	)
@@ -367,126 +261,106 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.get(
 		'/lang/:langSlug',
 		async ({ params: { langSlug }, query, request, status }) => {
-			const { page = 1, limit = 10, ...filters } = query
+			try {
+				const { page = 1, limit = 10, ...filters } = query
 
-			const language = await getLanguageBySlug(langSlug)
-			if (!language) {
-				return status(400, {
-					status: 400,
-					message: 'Invalid language slug'
+				const language = await getLanguageBySlug(langSlug)
+				if (!language) {
+					return status(400, {
+						status: 'error',
+						message: 'Invalid language slug',
+						statusCode: '400'
+					})
+				}
+
+				const { articles, total } = await ArticleService.findArticles({
+					page,
+					limit,
+					langId: language.id,
+					...filters
+				})
+
+				const baseUrl = `${request.url.split('?')[0]}`
+				const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
+					baseUrl,
+					page,
+					limit,
+					total,
+					query
+				)
+
+				return status(200, {
+					status: 'success',
+					message: `Articles in language ${language.name} retrieved successfully`,
+					data: articles,
+					pagination: {
+						currentPage: page,
+						totalPages,
+						totalItems: total,
+						perPage: limit,
+						nextPageUrl,
+						prevPageUrl
+					}
+				})
+			} catch (error: any) {
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve articles by language',
+					statusCode: '500'
 				})
 			}
-
-			const { articles, total } = await findArticles({
-				page,
-				limit,
-				langId: language.id,
-				...filters
-			})
-
-			const baseUrl = `${request.url.split('?')[0]}`
-			const { nextPageUrl, prevPageUrl, totalPages } = buildPaginationUrls(
-				baseUrl,
-				page,
-				limit,
-				total,
-				query
-			)
-
-			return status(200, {
-				status: 200,
-				message: `Articles in language ${language.name} retrieved successfully`,
-				data: articles,
-				pagenation: {
-					currentPage: page,
-					totalPages,
-					totalItems: total,
-					perPage: limit,
-					nextPageUrl,
-					prevPageUrl
-				}
-			})
 		},
 		{
-			query: GetArticlesQueryModel,
+			query: ArticleModel.query,
 			detail: {
 				tags: ['Articles'],
 				description:
 					'Get articles by language slug with pagination, filtering, and sorting',
-				summary: 'Get articles by language slug',
-				params: {
-					langSlug: {
-						type: 'string',
-						description: 'The slug of the language to retrieve (e.g., en, id)',
-						example: 'en'
-					}
-				},
-				query: {
-					page: {
-						description: 'The page number to retrieve.',
-						example: 1
-					},
-					limit: {
-						description: 'The number of items to retrieve per page.',
-						example: 10
-					},
-					search: {
-						description:
-							'A search term to filter articles by title, content, or excerpt.',
-						example: 'Technology'
-					},
-					tags: {
-						description:
-							'A comma-separated list of tag IDs to filter articles by.',
-						example: 'tagId1,tagId2'
-					},
-					category: {
-						description: 'A category ID to filter articles by.',
-						example: 'categoryId1'
-					},
-					sortBy: {
-						description: 'The field to sort the articles by.',
-						example: 'createdAt'
-					},
-					orderBy: {
-						description: 'The order to sort the articles in.',
-						example: 'desc'
-					}
-				}
+				summary: 'Get articles by language slug'
 			}
 		}
 	)
-	// GET article by slug
+	// GET article by slug (no auth required)
 	.get(
 		'/slug/:slug',
-		async ({ params: { slug }, status, request, user }) => {
-			const article = await getArticleBySlug(slug)
-			if (!article) {
-				return status(404, {
-					status: 404,
-					message: 'Article not found'
+		async ({ params: { slug }, request, user, status }) => {
+			try {
+				const article = await ArticleService.getArticleBySlug(slug)
+
+				const viewerIp =
+					request.headers.get('x-forwarded-for') ||
+					request.headers.get('x-real-ip') ||
+					'0.0.0.0'
+				const userAgent = request.headers.get('user-agent') || undefined
+				const referer = request.headers.get('referer') || undefined
+
+				await ArticleService.recordArticleView(
+					article.id,
+					viewerIp,
+					userAgent,
+					referer,
+					user?.id
+				)
+
+				return status(200, {
+					status: 'success',
+					message: 'Article retrieved successfully',
+					data: article
+				})
+			} catch (error: any) {
+				if (error.message === 'Article not found') {
+					return status(404, {
+						status: 'error',
+						message: 'Article not found',
+						statusCode: '404'
+					})
+				}
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to retrieve article',
+					statusCode: '500'
 				})
 			}
-
-			const viewerIp =
-				request.headers.get('x-forwarded-for') ||
-				request.headers.get('x-real-ip') ||
-				'0.0.0.0'
-			const userAgent = request.headers.get('user-agent') || undefined
-			const referer = request.headers.get('referer') || undefined
-			await recordArticleView(
-				article.id,
-				viewerIp,
-				userAgent,
-				referer,
-				user?.id
-			)
-
-			return status(200, {
-				status: 200,
-				message: 'Article retrieved successfully',
-				data: article
-			})
 		},
 		{
 			detail: {
@@ -500,20 +374,40 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.post(
 		'/',
 		async ({ body, user, status }) => {
-			const newArticle = await createArticle(body, user.id)
-			return status(201, {
-				status: 201,
-				message: 'Article created successfully',
-				data: newArticle
-			})
+			try {
+				const newArticle = await ArticleService.createArticle(body, user.id)
+				return status(201, {
+					status: 'success',
+					message: 'Article created successfully',
+					data: newArticle
+				})
+			} catch (error: any) {
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to create article',
+					statusCode: '500'
+				})
+			}
 		},
 		{
-			auth: true,
-			body: CreateArticleModel,
+			auth: true, // Requires authentication
+			body: ArticleModel.create,
 			detail: {
 				tags: ['Articles'],
 				description: 'Create a new article',
 				summary: 'Create article'
+			},
+			error({ code, error }) {
+				switch (code) {
+					case 'VALIDATION':
+						console.log()
+						const name = error.all[0] as any
+						if (name) {
+							const sch = name.schema?.error
+							console.log(sch)
+							if (sch) return { error: sch, msg: 'ah yang bener' }
+						}
+				}
 			}
 		}
 	)
@@ -521,22 +415,31 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.put(
 		'/:id',
 		async ({ params: { id }, body, status }) => {
-			const updatedArticle = await updateArticle(id, body)
-			if (!updatedArticle) {
-				return status(404, {
-					status: 404,
-					message: 'Article not found'
+			try {
+				const updatedArticle = await ArticleService.updateArticle(id, body)
+				return status(200, {
+					status: 'success',
+					message: 'Article updated successfully',
+					data: updatedArticle
+				})
+			} catch (error: any) {
+				if (error.message === 'Article not found') {
+					return status(404, {
+						status: 'error',
+						message: 'Article not found',
+						statusCode: '404'
+					})
+				}
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to update article',
+					statusCode: '500'
 				})
 			}
-			return status(200, {
-				status: 200,
-				message: 'Article updated successfully',
-				data: updatedArticle
-			})
 		},
 		{
-			auth: true,
-			body: UpdateArticleModel,
+			auth: true, // Requires authentication
+			body: ArticleModel.update,
 			detail: {
 				tags: ['Articles'],
 				description: 'Update an existing article',
@@ -548,14 +451,29 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	.delete(
 		'/:id',
 		async ({ params: { id }, status }) => {
-			await deleteArticle(id)
-			return status(200, {
-				status: 200,
-				message: 'Article deleted successfully'
-			})
+			try {
+				await ArticleService.deleteArticle(id)
+				return status(200, {
+					status: 'success',
+					message: 'Article deleted successfully'
+				})
+			} catch (error: any) {
+				if (error.message === 'Article not found') {
+					return status(404, {
+						status: 'error',
+						message: 'Article not found',
+						statusCode: '404'
+					})
+				}
+				return status(500, {
+					status: 'error',
+					message: error.message || 'Failed to delete article',
+					statusCode: '500'
+				})
+			}
 		},
 		{
-			auth: true,
+			auth: true, // Requires authentication
 			detail: {
 				tags: ['Articles'],
 				description: 'Delete an article',
