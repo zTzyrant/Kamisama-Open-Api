@@ -4,7 +4,7 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"dev": "bun run --watch src/index.ts",
-		"build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile server ./src/index.ts",
+		"build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile ./server ./src/index.ts",
 		"start": "bun run --watch src/index.ts",
 		"auth:generate": "bun x @better-auth/cli generate --config src/libs/auth.ts",
 		"auth:migrate": "bun x @better-auth/cli migrate",
@@ -12,8 +12,7 @@
 		"db:migrate": "prisma migrate dev",
 		"db:studio": "prisma studio",
 		"db:seed": "bun prisma/seed.ts",
-		"db:push": "prisma db push",
-		"postinstall": "npx prisma generate"
+		"db:push": "prisma db push"
 	},
 	"dependencies": {
 		"@better-auth/cli": "^1.2.12",
@@ -30,7 +29,7 @@
 		"crypto-js": "^4.2.0",
 		"elysia": "latest",
 		"nodemailer": "^7.0.5",
-		"prisma": "^6.11.1",
+		"prisma": "^6.13.0",
 		"xss": "^1.0.15"
 	},
 	"devDependencies": {
