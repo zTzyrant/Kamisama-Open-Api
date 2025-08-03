@@ -1,6 +1,7 @@
 import { BetterAuthError, User, betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { PrismaClient } from '@prisma/client'
+import transporter from './mail'
 import {
 	openAPI,
 	username,
@@ -41,25 +42,21 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true
 	},
-	databaseHooks: {
-		user: {
-			create: {
-				after: async (user) => {
-					await prisma.profile.create({
-						data: {
-							userId: user.id,
-							bio: null,
-							avatar: null,
-							jobs: [],
-							socials: [],
-							nationality: null,
-							website: null,
-							address: null,
-							phone: null
-						}
-					})
-				}
-			}
+	emailVerification: {
+		sendOnSignUp: true,
+		sendVerificationEmail: async ({ user, url, token }) => {
+			const emailTemplate = await import('fs/promises').then((fs) =>
+				fs.readFile('src/templates/email/verify.html', 'utf-8')
+			)
+
+			const emailHtml = emailTemplate.replace('{{verification_link}}', url)
+
+			await transporter.sendMail({
+				from: '"Kamisama" <no-reply@kamisama.com>',
+				to: user.email,
+				subject: 'Verify your email address',
+				html: emailHtml
+			})
 		}
 	},
 	plugins: [

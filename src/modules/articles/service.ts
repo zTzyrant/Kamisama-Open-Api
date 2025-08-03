@@ -109,8 +109,16 @@ export abstract class ArticleService {
 		} = options
 		const skip = (page - 1) * limit
 
-		const where: Prisma.ArticleWhereInput = {
-			statusId: statusId || (await this.getPublishStatusId())
+		const where: Prisma.ArticleWhereInput = {}
+
+		if (authorId) {
+			where.authorId = authorId
+			if (statusId !== undefined) {
+				where.statusId = statusId
+			}
+		} else {
+			// For public endpoints, default to published if no statusId is provided
+			where.statusId = statusId || (await this.getPublishStatusId())
 		}
 
 		if (authorId) where.authorId = authorId
@@ -209,7 +217,50 @@ export abstract class ArticleService {
 			throw new Error('Article not found')
 		}
 
-		return this.transformArticle(articleData) as ArticleModel.Data
+		// Ambil ID tag dan kategori dari artikel saat ini
+		const tagIds = articleData.tags.map((tag) => tag.id)
+		const categoryId = articleData.categoryId
+
+		// Cari artikel serupa
+		let recommendedArticles: ArticleModel.Data[] = []
+		if (tagIds.length > 0 || categoryId) {
+			const similarArticles = await this.findArticles({
+				tags: tagIds.join(','),
+				category: categoryId || undefined,
+				limit: 6 // Ambil 6 untuk memastikan ada 5 jika artikel saat ini termasuk
+			})
+			recommendedArticles = similarArticles.articles.filter(
+				(a) => a.id !== articleData.id
+			)
+		}
+
+		// Jika tidak ada artikel serupa, ambil artikel terbaru
+		if (recommendedArticles.length < 5) {
+			const latestArticles = await this.findArticles({
+				limit: 6, // Ambil 6 untuk memastikan ada 5 jika artikel saat ini termasuk
+				orderBy: 'desc'
+			})
+			// Gabungkan dan filter duplikat
+			const currentRecommendedIds = new Set(
+				recommendedArticles.map((a) => a.id)
+			)
+			const additionalArticles = latestArticles.articles.filter(
+				(a) => a.id !== articleData.id && !currentRecommendedIds.has(a.id)
+			)
+			recommendedArticles.push(...additionalArticles)
+		}
+
+		// Batasi hingga 5 rekomendasi
+		const finalRecommendations = recommendedArticles.slice(0, 5)
+
+		const transformedArticle = this.transformArticle(
+			articleData
+		) as ArticleModel.Data
+
+		return {
+			...transformedArticle,
+			recommendations: finalRecommendations
+		}
 	}
 
 	/**
@@ -251,22 +302,18 @@ export abstract class ArticleService {
 			data.statusId || (await this.getDefaultArticleStatusId())
 		const finalLangId = data.langId || (await this.getDefaultLanguageId())
 
-		let articleSlug = data.slug
-		if (!articleSlug) {
-			const date = new Date()
-			const baseSlug = generateSlug(data.title)
-			let uniqueSlug = `${baseSlug}-${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
-			let counter = 0
-			while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
-				counter++
-				uniqueSlug = `${baseSlug}-${counter}`
-			}
-			articleSlug = uniqueSlug
+		const date = new Date()
+		const baseSlug = generateSlug(data.title)
+		let uniqueSlug = `${baseSlug}-${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+		let counter = 0
+		while (await prisma.article.findUnique({ where: { slug: uniqueSlug } })) {
+			counter++
+			uniqueSlug = `${baseSlug}-${counter}`
 		}
 
 		const articleCreateData: Prisma.ArticleCreateInput = {
 			title: data.title,
-			slug: articleSlug,
+			slug: uniqueSlug,
 			content: sanitizeEditorJsContent(data.content),
 			author: { connect: { id: authorId } },
 			status: { connect: { id: finalStatusId } },
@@ -282,12 +329,14 @@ export abstract class ArticleService {
 				})
 		}
 
+		console.log(articleCreateData)
+
 		const newArticle = await prisma.article.create({
 			data: articleCreateData,
 			include: {
 				author: { select: { id: true, name: true, image: true } },
 				category: true,
-				tags: true,
+				tags: articleCreateData.tags ? true : false,
 				status: true,
 				lang: true,
 				_count: { select: { views: true } }
@@ -302,7 +351,8 @@ export abstract class ArticleService {
 	 */
 	static async updateArticle(
 		id: string,
-		data: ArticleModel.Update
+		data: ArticleModel.Update,
+		user: { id: string; role: string }
 	): Promise<ArticleModel.Data> {
 		const {
 			statusId,
@@ -311,7 +361,6 @@ export abstract class ArticleService {
 			tagIds,
 			excerpt,
 			coverImage,
-			slug,
 			content,
 			...rest
 		} = data
@@ -321,7 +370,32 @@ export abstract class ArticleService {
 			throw new Error('Article not found')
 		}
 
+		// Authorization Check
+		const userIsAdmin = ['admin', 'superAdmin', 'kamisama'].includes(user.role)
+		if (existingArticle.authorId !== user.id && !userIsAdmin) {
+			throw new Error(
+				'Forbidden: You do not have permission to edit this article.'
+			)
+		}
+
 		const articleUpdateData: Prisma.ArticleUpdateInput = { ...rest }
+
+		// Auto-generate slug if title is updated
+		if (rest.title && rest.title !== existingArticle.title) {
+			const date = new Date()
+			const baseSlug = generateSlug(rest.title)
+			let uniqueSlug = `${baseSlug}-${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+			let counter = 0
+			while (
+				await prisma.article.findFirst({
+					where: { slug: uniqueSlug, NOT: { id } }
+				})
+			) {
+				counter++
+				uniqueSlug = `${baseSlug}-${counter}`
+			}
+			articleUpdateData.slug = uniqueSlug
+		}
 
 		if (content !== undefined)
 			articleUpdateData.content = sanitizeEditorJsContent(content)

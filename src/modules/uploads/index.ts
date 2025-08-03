@@ -25,7 +25,24 @@ export const UploadRoutes = new Elysia({ prefix: '/upload' })
 			detail: {
 				tags: ['Uploads'],
 				summary: 'Upload Photo',
-				description: 'Uploads a photo as a base64 string and returns its URL.'
+				description: 'Uploads a photo as a base64 string. Returns both a relative path for database storage and a full URL for immediate preview.',
+				responses: {
+					200: {
+						description: 'Image uploaded successfully.',
+						content: {
+							'application/json': {
+								example: {
+									status: 200,
+									message: 'Image uploaded successfully',
+									data: {
+										path: '/uploads/images/your-image-uuid.jpg',
+										url: 'http://localhost:3000/uploads/images/your-image-uuid.jpg'
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	)

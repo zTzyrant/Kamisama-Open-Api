@@ -41,6 +41,11 @@ app
 	.use(
 		swagger({
 			documentation: {
+				info: {
+					title: 'Kamisama Open API',
+					description: 'Official OpenAPI documentation for the Kamisama platform.',
+					version: '1.0.0'
+				},
 				tags: [
 					{ name: 'App', description: 'General endpoints' },
 					{ name: 'Authentication', description: 'Authentication endpoints' },
@@ -54,7 +59,16 @@ app
 						description: 'Endpoints for managing article statuses'
 					}
 				],
-				components: await OpenAPI.components,
+				components: {
+					...(await OpenAPI.components),
+					securitySchemes: {
+						bearerAuth: {
+							type: 'http',
+							scheme: 'bearer',
+							bearerFormat: 'JWT'
+						}
+					}
+				},
 				paths: await OpenAPI.getPaths(),
 				security: [
 					{

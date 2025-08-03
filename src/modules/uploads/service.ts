@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
+import { getFullUrl } from '../../utils/url'
+
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'images')
 
 // Ensure upload directory exists
@@ -27,13 +29,16 @@ export const uploadPhoto = async (base64Image: string) => {
 
 	const filename = `${randomUUID()}.${extension}`
 	const filePath = join(UPLOAD_DIR, filename)
-	const imageUrl = `/uploads/images/${filename}` // URL relative to your server
+	const relativePath = `/uploads/images/${filename}`
 
-	try {
-		writeFileSync(filePath, base64Data, 'base64')
-		return { url: imageUrl }
-	} catch (error) {
-		console.error('Error saving image:', error)
-		throw new Error('Failed to save image')
-	}
+		try {
+			writeFileSync(filePath, base64Data, 'base64')
+			return {
+				path: relativePath,
+				url: getFullUrl(relativePath)
+			}
+		} catch (error) {
+			console.error('Error saving image:', error)
+			throw new Error('Failed to save image')
+		}
 }

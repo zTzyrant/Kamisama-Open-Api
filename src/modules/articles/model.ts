@@ -1,3 +1,4 @@
+import { error } from 'console'
 import { t } from 'elysia'
 
 /**
@@ -77,7 +78,19 @@ export namespace ArticleModel {
 				canArchive: t.Boolean(),
 				canDelete: t.Boolean()
 			})
-		)
+		),
+		recommendations: t.Optional(t.Array(t.Object({
+			id: t.String(),
+			title: t.String(),
+			slug: t.String(),
+			coverImage: t.Nullable(t.String()),
+			author: Author,
+			category: t.Nullable(Category),
+			tags: t.Array(Tag),
+			views: t.Number(),
+			createdAt: t.Date(),
+			publishedAt: t.Nullable(t.Date()),
+		})))
 	})
 
 	// --- SKEMA UNTUK INPUT (DTO - Data Transfer Object) ---
@@ -89,16 +102,19 @@ export namespace ArticleModel {
 		title: t.String({
 			minLength: 3,
 			maxLength: 100,
-			error: 'err_title_length'
+			error: 'article.title.length'
 		}),
 		content: t.String({
 			minLength: 3,
-			error: 'err_content_min_length'
+			error: 'article.content.minLength'
 		}),
-		statusId: t.String({ error: 'err_statusid_required' }),
-		langId: t.String({ error: 'err_langid_required' }),
-		slug: t.Optional(t.String({ minLength: 3, maxLength: 100 })),
-		excerpt: t.Optional(t.Nullable(t.String({ minLength: 3, maxLength: 255 }))),
+		statusId: t.String({ error: 'article.statusId.required' }),
+		langId: t.String({ error: 'article.langId.required' }),
+		excerpt: t.String({
+			minLength: 3,
+			maxLength: 255,
+			error: 'article.excerpt.length'
+		}),
 		coverImage: t.Optional(t.Nullable(t.String())),
 		categoryId: t.Optional(t.String()),
 		tagIds: t.Optional(t.Array(t.String()))
@@ -106,9 +122,35 @@ export namespace ArticleModel {
 
 	/**
 	 * Skema validasi untuk memperbarui artikel (PUT /articles/:id).
-	 * Semua properti bersifat opsional.
+	 * Semua properti bersifat opsional, dan slug tidak bisa diubah.
 	 */
-	export const update = t.Partial(create)
+	export const update = t.Object({
+		title: t.Optional(
+			t.String({
+				minLength: 3,
+				maxLength: 100,
+				error: 'article.title.length'
+			})
+		),
+		content: t.Optional(
+			t.String({
+				minLength: 3,
+				error: 'article.content.minLength'
+			})
+		),
+		statusId: t.Optional(t.String({ error: 'article.statusId.required' })),
+		langId: t.Optional(t.String({ error: 'article.langId.required' })),
+		excerpt: t.Optional(
+			t.String({
+				minLength: 3,
+				maxLength: 255,
+				error: 'article.excerpt.length'
+			})
+		),
+		coverImage: t.Optional(t.Nullable(t.String())),
+		categoryId: t.Optional(t.String()),
+		tagIds: t.Optional(t.Array(t.String()))
+	})
 
 	/**
 	 * Skema validasi untuk query parameter saat mengambil daftar artikel.

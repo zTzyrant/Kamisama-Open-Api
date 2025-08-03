@@ -10,7 +10,10 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session || !session.user) return status(401)
+				if (!session || !session.user)
+					return status(401, {
+						message: 'Unauthorized'
+					})
 
 				return {
 					user: session.user,
@@ -24,14 +27,20 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session || !session.user) return status(401)
+				if (!session || !session.user)
+					return status(401, {
+						message: 'Unauthorized'
+					})
 
 				if (
 					session.user.role !== 'admin' &&
 					session.user.role !== 'superAdmin' &&
 					session.user.role !== 'kamisama'
 				)
-					return status(403)
+					return status(403, {
+						errors: 'auth_level_too_low',
+						message: 'You are not authorized to perform this action'
+					})
 				return {
 					user: session.user,
 					session: session.session
@@ -44,12 +53,18 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session || !session.user) return status(401)
+				if (!session || !session.user)
+					return status(401, {
+						message: 'Unauthorized'
+					})
 				if (
 					session.user.role !== 'superAdmin' &&
 					session.user.role !== 'kamisama'
 				)
-					return status(403)
+					return status(403, {
+						errors: 'auth_level_too_low',
+						message: 'You are not authorized to perform this action'
+					})
 
 				return {
 					user: session.user,
@@ -63,8 +78,15 @@ export const betterAuth = new Elysia({ name: 'better-auth' })
 					headers
 				})
 
-				if (!session || !session.user) return status(401)
-				if (session.user.role !== 'kamisama') return status(403)
+				if (!session || !session.user)
+					return status(401, {
+						message: 'Unauthorized'
+					})
+				if (session.user.role !== 'kamisama')
+					return status(403, {
+						errors: 'auth_level_too_low',
+						message: 'You are not authorized to perform this action'
+					})
 				return {
 					user: session.user,
 					session: session.session

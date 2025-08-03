@@ -87,7 +87,36 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description: 'Get all articles with pagination, filtering, and sorting',
-				summary: 'Get all articles'
+				summary: 'Get all articles',
+				responses: {
+					200: {
+						description:
+							'Successful response with a paginated list of articles.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'success',
+									message: 'Articles retrieved successfully',
+									data: [
+										{
+											id: 'clx123abc456def789',
+											title: 'An Awesome Article'
+											// ... other fields
+										}
+									],
+									pagination: {
+										currentPage: 1,
+										totalPages: 10,
+										totalItems: 100,
+										perPage: 10,
+										nextPageUrl: '/articles?page=2&limit=10',
+										prevPageUrl: null
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	)
@@ -143,7 +172,31 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 				tags: ['Articles'],
 				description:
 					'Get all articles authored by the current user with pagination, filtering, and sorting',
-				summary: 'Get my articles'
+				summary: 'Get my articles',
+				responses: {
+					200: {
+						description:
+							"Successful response with a paginated list of the user's articles.",
+						content: {
+							'application/json': {
+								example: {
+									status: 'success',
+									message: 'Your articles retrieved successfully',
+									data: [
+										/* ... */
+									],
+									pagination: {
+										/* ... */
+									}
+								}
+							}
+						}
+					},
+					401: {
+						description:
+							'Unauthorized. Missing or invalid authentication token.'
+					}
+				}
 			}
 		}
 	)
@@ -190,7 +243,35 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description: 'Get an article by its ID',
-				summary: 'Get article by ID'
+				summary: 'Get article by ID',
+				responses: {
+					200: {
+						description: 'Successful response with the full article data.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'success',
+									message: 'Article retrieved successfully',
+									data: {
+										id: 'clx123abc456def789',
+										// ... other fields
+										permissions: {
+											canEdit: true,
+											canArchive: false,
+											canDelete: true
+										}
+									}
+								}
+							}
+						}
+					},
+					401: {
+						description: 'Unauthorized.'
+					},
+					404: {
+						description: 'Article not found.'
+					}
+				}
 			}
 		}
 	)
@@ -253,7 +334,16 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 				tags: ['Articles'],
 				description:
 					'Get articles by status slug with pagination, filtering, and sorting',
-				summary: 'Get articles by status slug'
+				summary: 'Get articles by status slug',
+				responses: {
+					200: {
+						description:
+							'Successful response with a paginated list of articles.'
+					},
+					400: {
+						description: 'Invalid article status slug.'
+					}
+				}
 			}
 		}
 	)
@@ -316,7 +406,16 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 				tags: ['Articles'],
 				description:
 					'Get articles by language slug with pagination, filtering, and sorting',
-				summary: 'Get articles by language slug'
+				summary: 'Get articles by language slug',
+				responses: {
+					200: {
+						description:
+							'Successful response with a paginated list of articles.'
+					},
+					400: {
+						description: 'Invalid language slug.'
+					}
+				}
 			}
 		}
 	)
@@ -366,7 +465,15 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description: 'Get an article by its slug',
-				summary: 'Get article by slug'
+				summary: 'Get article by slug',
+				responses: {
+					200: {
+						description: 'Successful response with the full article data.'
+					},
+					404: {
+						description: 'Article not found.'
+					}
+				}
 			}
 		}
 	)
@@ -395,18 +502,71 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description: 'Create a new article',
-				summary: 'Create article'
-			},
-			error({ code, error }) {
-				switch (code) {
-					case 'VALIDATION':
-						console.log()
-						const name = error.all[0] as any
-						if (name) {
-							const sch = name.schema?.error
-							console.log(sch)
-							if (sch) return { error: sch, msg: 'ah yang bener' }
+				summary: 'Create article',
+				responses: {
+					201: {
+						description: 'Article created successfully.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'success',
+									message: 'Article created successfully',
+									data: {
+										id: 'clx123abc456def789',
+										title: 'My New Awesome Article',
+										slug: 'my-new-awesome-article-2025-08-02',
+										content: '...'
+										// ... other fields
+									}
+								}
+							}
 						}
+					},
+					400: {
+						description: 'Validation error.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'error',
+									message: 'Validation failed',
+									statusCode: '400',
+									errors: [
+										{
+											field: 'title',
+											code: 'article.title.length'
+										}
+									]
+								}
+							}
+						}
+					},
+					401: {
+						description:
+							'Unauthorized. Missing or invalid authentication token.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'error',
+									message: 'Unauthorized',
+									statusCode: '401'
+								}
+							}
+						}
+					}
+				}
+			},
+			error({ code, error, set }) {
+				if (code === 'VALIDATION') {
+					set.status = 400
+					return {
+						status: 'error',
+						message: 'Validation failed',
+						statusCode: '400',
+						errors: error.all.map((err: any) => ({
+							field: err.path.replace('/', ''),
+							code: err.schema.errors ? err.schema.errors : err.schema.error
+						}))
+					}
 				}
 			}
 		}
@@ -414,9 +574,13 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 	// PUT update article
 	.put(
 		'/:id',
-		async ({ params: { id }, body, status }) => {
+		async ({ params: { id }, body, user, status }) => {
 			try {
-				const updatedArticle = await ArticleService.updateArticle(id, body)
+				const updatedArticle = await ArticleService.updateArticle(
+					id,
+					body,
+					user as any
+				)
 				return status(200, {
 					status: 'success',
 					message: 'Article updated successfully',
@@ -428,6 +592,13 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 						status: 'error',
 						message: 'Article not found',
 						statusCode: '404'
+					})
+				}
+				if (error.message.includes('Forbidden')) {
+					return status(403, {
+						status: 'error',
+						message: error.message,
+						statusCode: '403'
 					})
 				}
 				return status(500, {
@@ -443,7 +614,87 @@ export const ArticleRoutes = new Elysia({ prefix: '/articles' })
 			detail: {
 				tags: ['Articles'],
 				description: 'Update an existing article',
-				summary: 'Update article'
+				summary: 'Update article',
+				responses: {
+					200: {
+						description: 'Article updated successfully.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'success',
+									message: 'Article updated successfully',
+									data: {
+										id: 'clx123abc456def789',
+										title: 'My Updated Awesome Article',
+										slug: 'my-updated-awesome-article-2025-08-02',
+										content: '...'
+										// ... other fields
+									}
+								}
+							}
+						}
+					},
+					400: {
+						description: 'Validation error.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'error',
+									message: 'Validation failed',
+									statusCode: '400',
+									errors: [
+										{
+											field: 'title',
+											code: 'article.title.length'
+										}
+									]
+								}
+							}
+						}
+					},
+					403: {
+						description: 'Forbidden. User does not have permission.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'error',
+									message:
+										'Forbidden: You do not have permission to edit this article.',
+									statusCode: '403'
+								}
+							}
+						}
+					},
+					404: {
+						description: 'Article not found.',
+						content: {
+							'application/json': {
+								example: {
+									status: 'error',
+									message: 'Article not found',
+									statusCode: '404'
+								}
+							}
+						}
+					}
+				}
+			},
+			error({ code, error, set }) {
+				if (code === 'VALIDATION') {
+					set.status = 400;
+					console.log(error.all);
+					return {
+						status: 'error',
+						message: 'Validation failed',
+						statusCode: '400',
+						errors: error.all.map((err: any) => ({
+							field: err.path.replace('/', ''),
+							code: Array.isArray(err.schema.error)
+								? err.schema.error.toString()
+								: err.schema.error
+						}))
+					};
+				}
 			}
 		}
 	)
