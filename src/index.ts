@@ -18,7 +18,11 @@ export const app = new Elysia()
 app
 	.use(
 		cors({
-			origin: ['http://localhost:3000', 'http://localhost:5173'],
+			origin: [
+				'http://localhost:3000',
+				'http://localhost:5173',
+				'https://kamisama-v0.netlify.app'
+			],
 			methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],
 			credentials: true
@@ -43,7 +47,8 @@ app
 			documentation: {
 				info: {
 					title: 'Kamisama Open API',
-					description: 'Official OpenAPI documentation for the Kamisama platform.',
+					description:
+						'Official OpenAPI documentation for the Kamisama platform.',
 					version: '1.0.0'
 				},
 				tags: [
