@@ -78,7 +78,7 @@ export const auth = betterAuth({
 	],
 	basePath: '/api/auth',
 	baseURL: 'http://localhost:3000',
-	trustedOrigins: ['http://localhost:5173']
+	trustedOrigins: ['http://localhost:5173', 'https://kamisama-v0.netlify.app']
 })
 
 // ... sisa kode Anda tetap sama
