@@ -12,7 +12,8 @@
 		"db:migrate": "prisma migrate dev",
 		"db:studio": "prisma studio",
 		"db:seed": "bun prisma/seed.ts",
-		"db:push": "prisma db push"
+		"db:push": "prisma db push",
+		"postinstall": "npx prisma generate"
 	},
 	"dependencies": {
 		"@better-auth/cli": "^1.2.12",
