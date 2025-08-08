@@ -29,13 +29,6 @@ app
 		})
 	)
 	.use(betterAuth)
-	.get('/user', ({ user }) => user, {
-		auth: true,
-		detail: {
-			tags: ['Authentication'],
-			description: 'Get user data'
-		}
-	})
 	.use(
 		staticPlugin({
 			assets: 'uploads',
@@ -88,7 +81,8 @@ app
 		({ status }) => {
 			return status(200, {
 				status: 200,
-				message: 'Welcome to Kamisama Open API'
+				message: 'Welcome to Kamisama Open API',
+				test: 'webhooks'
 			})
 		},
 		{
