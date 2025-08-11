@@ -78,13 +78,25 @@ export const auth = betterAuth({
 	],
 	basePath: '/api/auth',
 	baseURL: 'http://localhost:3000',
-	trustedOrigins: ['http://localhost:5173', 'https://kamisama-v0.netlify.app'],
+	trustedOrigins: ['http://localhost:5173', process.env.FRONTEND_URL || '*'],
 	advanced: {
 		crossSubDomainCookies: {
 			enabled: true,
-			domain: 'https://kamisama-v0.netlify.app'
+			domain: 'cb1e5916d2f6.ngrok-free.app'
+		},
+		cookie: {
+			sameSite: 'None',
+			secure: true,
+			// domain: process.env.COOKIE_DOMAIN || undefined,
+			path: '/'
+		},
+		defaultCookieAttributes: {
+			sameSite: 'None',
+			secure: true,
+			partitioned: true
 		}
-	}
+	},
+	credentials: 'include'
 })
 
 // ... sisa kode Anda tetap sama

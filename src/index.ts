@@ -21,7 +21,8 @@ app
 			origin: [
 				'http://localhost:3000',
 				'http://localhost:5173',
-				'https://kamisama-v0.netlify.app'
+				'https://kamisama-v0.netlify.app',
+				process.env.FRONTEND_URL || '*'
 			],
 			methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],
